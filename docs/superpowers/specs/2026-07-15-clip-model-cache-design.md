@@ -35,7 +35,7 @@ HF_ENDPOINT=https://hf-mirror.com
 
 `HF_ENDPOINT` remains overridable from the host. A user can select the official service for a single command with `HF_ENDPOINT=https://huggingface.co` if the mirror is unavailable.
 
-The root-level `/models/` directory will be ignored by Git. This rule does not affect the tracked Python package directory at `robomimic/models/`.
+The root-level `/models/` directory will be ignored by Git and excluded from the Docker build context. These root-anchored rules do not affect the tracked Python package directory at `robomimic/models/`.
 
 ## Model Cache Behavior
 
@@ -73,17 +73,19 @@ HF_ENDPOINT=https://huggingface.co docker compose run --rm -T robomimic \
 
 ## Verification
 
-Verification will cover four layers:
+Verification will cover five layers:
 
 1. A focused unit test will replace the Transformers loaders with lightweight fakes, set a temporary `HF_HOME`, import `lang_utils.py`, and require the model and tokenizer to receive the same `${HF_HOME}/clip` cache directory. The test will fail against the current tokenizer behavior before the implementation is changed.
 2. `docker compose config` will verify the resolved `HF_HOME`, overridable `HF_ENDPOINT`, and host-to-container bind mount.
 3. `git check-ignore` will verify that a representative file below `models/huggingface/` is ignored while `robomimic/models/` remains tracked.
-4. After the real download, an offline Compose run will set `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1`, call `get_lang_emb("pick up the cube")`, and require `torch.Size([768])`.
+4. A Docker build-context check will verify that `/models/` is present in `.dockerignore`, preventing cached weights and tokenizer assets from being copied by `COPY . .`.
+5. After the real download, an offline Compose run will set `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1`, call `get_lang_emb("pick up the cube")`, and require `torch.Size([768])`.
 
 ## Files
 
 - Modify `compose.yaml` to add the Hugging Face environment and bind mount.
 - Modify `.gitignore` to ignore the root-level model cache.
+- Modify `.dockerignore` to exclude the root-level model cache from the image build context.
 - Modify `robomimic/utils/lang_utils.py` to share one model ID and cache directory.
 - Add a focused test for CLIP cache routing.
 - Modify `README.md` to document downloading, storage, mirror override, and offline verification.
