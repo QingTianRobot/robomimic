@@ -21,11 +21,11 @@ Replace the GitHub clone steps with a local-source build:
 1. Add `.dockerignore` so `.git`, caches, local environments, datasets, videos, and large documentation images are excluded from the Docker context.
 2. Copy the current workspace into `/opt/robomimic` and install it in editable mode. The image therefore contains the exact source being built instead of an unrelated fresh clone of upstream.
 3. Configure pip to use the Tsinghua University PyPI mirror.
-4. Install `robosuite==1.5.1` from that mirror. Version 1.5.1 is available on the mirror and is the version recommended by this repository for its current datasets.
+4. Install `mujoco==3.3.7` as a binary wheel, then install `robosuite==1.5.1` from that mirror. MuJoCo 3.3.7 is the latest mirrored release with a CPython 3.9 Linux wheel; newer MuJoCo releases fall back to a source build that requires an external `MUJOCO_PATH`. Robosuite 1.5.1 is the version recommended by this repository for its current datasets.
 
 ## Scope
 
-Modify `Dockerfile` to configure Conda and pip mirrors, copy the local robomimic source, and install `robosuite==1.5.1`. Create `.dockerignore` to keep the build context small. Docker Hub, Ubuntu APT, the Miniconda installer, Python, PyTorch, and torchvision versions remain unchanged.
+Modify `Dockerfile` to configure Conda and pip mirrors, copy the local robomimic source, and install `mujoco==3.3.7` with `robosuite==1.5.1`. Create `.dockerignore` to keep the build context small. Docker Hub, Ubuntu APT, the Miniconda installer, Python, PyTorch, and torchvision versions remain unchanged.
 
 The existing GitHub clone commands and their proxy argument will be removed. No third-party GitHub proxy will remain in the production Dockerfile.
 
@@ -44,7 +44,8 @@ After the Dockerfile and `.dockerignore` changes, run the same command and requi
 3. Python reports version 3.9.
 4. `torch`, `robomimic`, and `robosuite` import successfully.
 5. The installed robomimic package resolves to `/opt/robomimic`.
-6. The installed robosuite distribution reports version 1.5.1.
+6. The installed MuJoCo distribution reports version 3.3.7.
+7. The installed robosuite distribution reports version 1.5.1.
 
 ## Failure handling
 
