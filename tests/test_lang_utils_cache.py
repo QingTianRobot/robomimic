@@ -46,11 +46,10 @@ def test_clip_loaders_share_hf_cache(monkeypatch, tmp_path):
     fake_transformers = types.ModuleType("transformers")
     fake_transformers.AutoTokenizer = FakeTokenizer
     fake_transformers.CLIPTextModelWithProjection = FakeModel
-    fake_transformers.AutoModel = object
-    fake_transformers.pipeline = object
 
     monkeypatch.setitem(sys.modules, "transformers", fake_transformers)
     monkeypatch.setenv("HF_HOME", str(tmp_path))
+    monkeypatch.setenv("TOKENIZERS_PARALLELISM", "sentinel")
 
     module_path = Path(__file__).parents[1] / "robomimic" / "utils" / "lang_utils.py"
     spec = importlib.util.spec_from_file_location("lang_utils_under_test", module_path)
