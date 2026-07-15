@@ -29,6 +29,13 @@ RUN curl -fsSL https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_6
     rm /tmp/miniconda.sh && \
     conda clean -afy
 
+# Use domestic Conda mirrors and avoid the Anaconda default-channel ToS prompt
+RUN /opt/conda/bin/conda config --system --remove-key default_channels || true && \
+    /opt/conda/bin/conda config --system --add default_channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main && \
+    /opt/conda/bin/conda config --system --add default_channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/r && \
+    /opt/conda/bin/conda config --system --set channel_alias https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud && \
+    /opt/conda/bin/conda config --system --set show_channel_urls true
+
 # Create and activate robomimic conda environment with Python 3.9
 RUN /opt/conda/bin/conda create -n robomimic_venv python=3.9 -y
 
@@ -36,18 +43,21 @@ RUN /opt/conda/bin/conda create -n robomimic_venv python=3.9 -y
 RUN /opt/conda/bin/conda run -n robomimic_venv conda install -y pytorch==2.0.0 torchvision==0.15.0 cpuonly -c pytorch || \
     /opt/conda/bin/conda run -n robomimic_venv pip install torch==2.0.0+cpu torchvision==0.15.0+cpu
 
-# Install robomimic from source
-WORKDIR /opt
-RUN git clone https://github.com/ARISE-Initiative/robomimic.git && \
-    /opt/conda/bin/conda run -n robomimic_venv pip install -e ./robomimic
+# Use a domestic PyPI mirror for Python dependencies
+ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+ENV PIP_INDEX_URL=${PIP_INDEX_URL}
 
-# Install robosuite
-RUN git clone https://github.com/ARISE-Initiative/robosuite.git && \
-    cd robosuite && \
-    /opt/conda/bin/conda run -n robomimic_venv pip install -r requirements.txt
+# Install the current robomimic source tree
+WORKDIR /opt/robomimic
+COPY . .
+RUN /opt/conda/bin/conda run -n robomimic_venv pip install -e .
+
+# Install the robosuite version recommended for the current datasets
+# MuJoCo 3.3.7 is the latest release with a CPython 3.9 Linux wheel
+RUN /opt/conda/bin/conda run -n robomimic_venv pip install --only-binary=mujoco \
+    mujoco==3.3.7 robosuite==1.5.1
 
 # Optional: Install robomimic documentation dependencies
-WORKDIR /opt/robomimic
 RUN /opt/conda/bin/conda run -n robomimic_venv pip install -r requirements-docs.txt
 
 # Set the working directory
