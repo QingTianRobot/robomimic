@@ -39,6 +39,13 @@ ACTION_REFS = (
     ),
 )
 
+PUBLISH_STEP_ORDER = (
+    "Run notifier tests",
+    "Log in to GHCR",
+    "Build and push image",
+    "Send Feishu publication card",
+)
+
 
 def indented_block(text, marker):
     lines = text.splitlines()
@@ -56,6 +63,35 @@ def indented_block(text, marker):
             break
         end += 1
     return "\n".join(lines[start:end])
+
+
+def assert_exact_root_permissions(test_case, workflow):
+    permission_keys = re.findall(
+        r"(?m)^[ \t]*permissions[ \t]*:",
+        workflow,
+    )
+    test_case.assertEqual(permission_keys, ["permissions:"])
+
+    permissions = indented_block(workflow, "permissions:")
+    test_case.assertEqual(
+        permissions.splitlines(),
+        ["permissions:", "  contents: read", "  packages: write"],
+    )
+
+
+def assert_publish_step_order(test_case, workflow):
+    lines = workflow.splitlines()
+    positions = []
+    for step_name in PUBLISH_STEP_ORDER:
+        marker = f"      - name: {step_name}"
+        matches = [index for index, line in enumerate(lines) if line == marker]
+        test_case.assertEqual(
+            len(matches),
+            1,
+            msg=f"expected exactly one publish step {step_name!r}",
+        )
+        positions.append(matches[0])
+    test_case.assertEqual(positions, sorted(positions))
 
 
 class PublishWorkflowTest(unittest.TestCase):
@@ -76,15 +112,23 @@ class PublishWorkflowTest(unittest.TestCase):
             ],
         )
 
-        permissions = indented_block(self.workflow, "permissions:")
-        self.assertEqual(
-            permissions.splitlines(),
-            ["permissions:", "  contents: read", "  packages: write"],
+        assert_exact_root_permissions(self, self.workflow)
+        permission_bypasses = (
+            self.workflow.replace(
+                "jobs:\n",
+                "permissions: write-all\n\njobs:\n",
+                1,
+            ),
+            self.workflow.replace(
+                "  publish:\n",
+                "  publish:\n    permissions: {contents: read, packages: write}\n",
+                1,
+            ),
         )
-        self.assertEqual(
-            len(re.findall(r"(?m)^\s*permissions:\s*$", self.workflow)),
-            1,
-        )
+        for mutated_workflow in permission_bypasses:
+            with self.subTest(mutated_workflow=mutated_workflow):
+                with self.assertRaises(AssertionError):
+                    assert_exact_root_permissions(self, mutated_workflow)
 
         publish_job = indented_block(self.workflow, "  publish:")
         self.assertIn("    if: github.ref == 'refs/heads/master'", publish_job)
@@ -166,10 +210,16 @@ class PublishWorkflowTest(unittest.TestCase):
             self.assertIn(setting, build)
 
     def test_notification_is_success_scoped_and_secrets_are_step_local(self):
-        build_marker = "      - name: Build and push image"
-        notify_marker = "      - name: Send Feishu publication card"
-        self.assertLess(self.workflow.index(build_marker), self.workflow.index(notify_marker))
+        assert_publish_step_order(self, self.workflow)
+        misleading_comments = "\n".join(
+            f"# {step_name}" for step_name in reversed(PUBLISH_STEP_ORDER)
+        )
+        assert_publish_step_order(
+            self,
+            f"{misleading_comments}\n{self.workflow}",
+        )
 
+        notify_marker = "      - name: Send Feishu publication card"
         notify = indented_block(self.workflow, notify_marker)
         self.assertEqual(
             re.findall(r"(?m)^        if:\s*(.+)$", notify),
