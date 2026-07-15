@@ -1,0 +1,44 @@
+name: robomimic
+
+services:
+  robomimic:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
+        UBUNTU_APT_MIRROR: ${UBUNTU_APT_MIRROR:-https://mirrors.tuna.tsinghua.edu.cn/ubuntu}
+    image: robomimic:latest
+    gpus: all
+    shm_size: 2gb
+    environment:
+      DISPLAY: ${DISPLAY:?DISPLAY must be set by the host desktop session}
+      XAUTHORITY: /tmp/.docker.xauth
+      MUJOCO_GL: glfw
+      NVIDIA_DRIVER_CAPABILITIES: all
+      ZSH_CACHE_DIR: /tmp/oh-my-zsh-cache
+    volumes:
+      - type: bind
+        source: .
+        target: /opt/robomimic
+      - type: bind
+        source: /tmp/.X11-unix
+        target: /tmp/.X11-unix
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${XAUTHORITY:?XAUTHORITY must point to the host Xauthority file}
+        target: /tmp/.docker.xauth
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${HOME:?HOME must be set}/.oh-my-zsh
+        target: /root/.oh-my-zsh
+        read_only: true
+        bind:
+          create_host_path: false
+    working_dir: /opt/robomimic
+    stdin_open: true
+    tty: true
+    command: ["/usr/bin/zsh", "-l"]
