@@ -31,6 +31,8 @@ Create `.github/workflows/publish-image.yml` with these triggers:
 - `push` to `master`
 - `workflow_dispatch`
 
+The publishing job will also require `github.ref == 'refs/heads/master'`, so a manually dispatched run cannot select a feature branch and overwrite the release tags.
+
 The workflow will use one job on `ubuntu-latest` with minimum repository permissions:
 
 ```yaml
@@ -139,7 +141,7 @@ No retry will blindly duplicate cards. The HTTP request will have a bounded time
 
 ## Testing
 
-Create `tests/test_notify_feishu.py` using the Python standard library. Tests will not access the network or require real secrets.
+Create `tests/test_notify_feishu.py` and `tests/test_publish_workflow.py` using the Python standard library. Tests will not access the network or require real secrets.
 
 Coverage will include:
 
@@ -151,6 +153,7 @@ Coverage will include:
 6. Both Feishu success response formats.
 7. HTTP errors, timeouts, malformed JSON, and Feishu business errors.
 8. Sanitized errors that never include webhook URLs or signing secrets.
+9. The workflow trigger, permissions, concurrency, tags, official Docker actions, success-only notification ordering, and secret references.
 
 Verification commands will include:
 
@@ -176,6 +179,7 @@ Update `README.md` with:
 - Create `.github/workflows/publish-image.yml`.
 - Create `.github/scripts/notify_feishu.py`.
 - Create `tests/test_notify_feishu.py`.
+- Create `tests/test_publish_workflow.py`.
 - Modify `README.md`.
 - Add the implementation plan under `docs/superpowers/plans/` after this design is approved.
 
