@@ -12,7 +12,7 @@ services:
     gpus: all
     shm_size: 2gb
     environment:
-      DISPLAY: ${DISPLAY:?DISPLAY must be set by the host desktop session}
+      DISPLAY: ${DISPLAY:-}
       XAUTHORITY: /tmp/.docker.xauth
       MUJOCO_GL: glfw
       NVIDIA_DRIVER_CAPABILITIES: all
@@ -24,16 +24,17 @@ services:
       - type: bind
         source: /tmp/.X11-unix
         target: /tmp/.X11-unix
+        read_only: true
         bind:
           create_host_path: false
       - type: bind
-        source: ${XAUTHORITY:?XAUTHORITY must point to the host Xauthority file}
+        source: ${XAUTHORITY:-/dev/null}
         target: /tmp/.docker.xauth
         read_only: true
         bind:
           create_host_path: false
       - type: bind
-        source: ${HOME:?HOME must be set}/.oh-my-zsh
+        source: ${HOME:-/root}/.oh-my-zsh
         target: /root/.oh-my-zsh
         read_only: true
         bind:

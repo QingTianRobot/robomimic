@@ -84,6 +84,8 @@ The graphical Compose workflow requires:
 - `DISPLAY` and `XAUTHORITY` exported by the desktop session
 - Oh My Zsh installed at `${HOME}/.oh-my-zsh`
 
+These graphical variables are not required to build the image, but they must be present before starting a GUI application from the container.
+
 Open the repository in an interactive Zsh shell with `robomimic_venv` activated:
 
 ```bash
@@ -91,6 +93,8 @@ docker compose run --rm robomimic
 ```
 
 The repository is bind-mounted at `/opt/robomimic`, so local source edits are immediately visible to the editable installation. The host Oh My Zsh directory is mounted read-only; the container uses the same `robbyrussell` theme and plugin selection without sourcing host-only Conda, ROS, Julia, or local-tool paths.
+
+The development container runs as root. Files created under the bind-mounted repository, such as training outputs or caches, can therefore become root-owned on the host.
 
 From the Compose shell, launch the robosuite random-action GUI demo:
 

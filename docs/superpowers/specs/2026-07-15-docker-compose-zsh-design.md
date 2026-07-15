@@ -47,7 +47,7 @@ Create one `robomimic` service in `compose.yaml` with these responsibilities:
 - Build the current repository as `robomimic:latest`.
 - Allocate all available NVIDIA GPUs with Compose's `gpus: all` setting.
 - Set `NVIDIA_DRIVER_CAPABILITIES=all`, matching the verified NVIDIA OpenGL launch configuration.
-- Forward `DISPLAY`, the X11 Unix socket, and the host Xauthority cookie.
+- Forward `DISPLAY`, the read-only X11 Unix socket, and the host Xauthority cookie when the desktop session provides them.
 - Bind-mount the repository at `/opt/robomimic`, matching the editable install path already recorded in the Conda environment.
 - Bind-mount `${HOME}/.oh-my-zsh` at `/root/.oh-my-zsh` as read-only, using long bind syntax with `create_host_path: false`.
 - Allocate a TTY and keep standard input open.
@@ -68,9 +68,13 @@ Only `~/.oh-my-zsh` is mounted from the host. The complete host `~/.zshrc` is de
 
 The container-owned `.zshrc` mirrors only the current Oh My Zsh theme and plugin selection. If that selection later changes on the host, the versioned container `.zshrc` must be updated explicitly. This trade-off favors deterministic startup and a valid Conda environment over automatically executing arbitrary host shell initialization.
 
+Because the read-only host tree is owned by the host UID rather than container root, the container configuration disables Oh My Zsh's `compfix` ownership warning. The read-only bind prevents the container from changing the mounted framework or plugins.
+
 ## Failure Handling
 
-Compose will use long bind syntax with `create_host_path: false` for `${HOME}/.oh-my-zsh` and `${XAUTHORITY}`, so either missing source produces a bind-mount error instead of an empty directory. The README will state that graphical use requires a local Linux desktop session, NVIDIA Container Toolkit, a populated `DISPLAY`, and a populated `XAUTHORITY`.
+Compose configuration and image builds must work without desktop variables. An unset `DISPLAY` becomes an empty value and an unset `XAUTHORITY` uses `/dev/null` as a harmless read-only placeholder. The README will state that graphical use still requires a local Linux desktop session, NVIDIA Container Toolkit, a populated `DISPLAY`, and a populated `XAUTHORITY`. The Oh My Zsh bind continues to use `create_host_path: false`, so a missing host installation fails when the service starts instead of creating an empty directory.
+
+The service runs as root. The README will warn that files created inside the writable repository bind can become root-owned on the host.
 
 The entrypoint will stop if Conda initialization or environment activation fails. It will forward signals by replacing itself with the requested command. The Zsh configuration will only source Oh My Zsh when its main script exists, allowing a direct `docker run` shell to remain usable even when the host directory is not mounted.
 
