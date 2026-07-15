@@ -99,7 +99,6 @@ A successful interactive startup displays a container-specific banner and prompt
 │ env: robomimic_venv                       │
 │ workspace: /opt/robomimic                 │
 ╰───────────────────────────────────────────╯
-
 [ROBOMIMIC CONTAINER] (robomimic_venv) /opt/robomimic git:(master)
 ➜
 ```

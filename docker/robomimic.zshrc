@@ -1,6 +1,7 @@
 export ZSH="${ZSH:-$HOME/.oh-my-zsh}"
 export ZSH_CACHE_DIR="${ZSH_CACHE_DIR:-/tmp/oh-my-zsh-cache}"
 export ZSH_DISABLE_COMPFIX=true
+export CONDA_CHANGEPS1=false
 
 ZSH_THEME="robbyrussell"
 plugins=(
@@ -31,8 +32,13 @@ robomimic_banner() {
   print -P '%F{yellow}%B╰───────────────────────────────────────────╯%b%f'
 }
 
+robomimic_prompt_conda_env() {
+  local env_name="${CONDA_DEFAULT_ENV:-no-conda}"
+  print -r -- "${env_name//\%/%%}"
+}
+
 setopt prompt_subst
-PROMPT='%F{yellow}%B[ROBOMIMIC CONTAINER]%b%f %F{magenta}(${CONDA_DEFAULT_ENV:-no-conda})%f %F{cyan}%~%f'
+PROMPT='%F{yellow}%B[ROBOMIMIC CONTAINER]%b%f %F{magenta}($(robomimic_prompt_conda_env))%f %F{cyan}%~%f'
 if (( $+functions[git_prompt_info] )); then
   PROMPT+=' $(git_prompt_info)'
 fi

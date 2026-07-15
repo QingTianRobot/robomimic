@@ -41,7 +41,15 @@ rg -n 'ROBOMIMIC CONTAINER|already inside the container' README.md
 
 Expected: FAIL because the README does not show or explain a container-specific prompt.
 
-- [ ] **Step 3: Add the container banner and prompt**
+- [ ] **Step 3: Disable Conda prompt rewriting**
+
+Add this line after `export ZSH_DISABLE_COMPFIX=true` in `docker/robomimic.zshrc`:
+
+```zsh
+export CONDA_CHANGEPS1=false
+```
+
+- [ ] **Step 4: Add the container banner and prompt**
 
 Append this exact block after the Conda initialization block in `docker/robomimic.zshrc`:
 
@@ -53,8 +61,13 @@ robomimic_banner() {
   print -P '%F{yellow}%B╰───────────────────────────────────────────╯%b%f'
 }
 
+robomimic_prompt_conda_env() {
+  local env_name="${CONDA_DEFAULT_ENV:-no-conda}"
+  print -r -- "${env_name//\%/%%}"
+}
+
 setopt prompt_subst
-PROMPT='%F{yellow}%B[ROBOMIMIC CONTAINER]%b%f %F{magenta}(${CONDA_DEFAULT_ENV:-no-conda})%f %F{cyan}%~%f'
+PROMPT='%F{yellow}%B[ROBOMIMIC CONTAINER]%b%f %F{magenta}($(robomimic_prompt_conda_env))%f %F{cyan}%~%f'
 if (( $+functions[git_prompt_info] )); then
   PROMPT+=' $(git_prompt_info)'
 fi
@@ -65,7 +78,7 @@ if [[ -o interactive && -t 1 ]]; then
 fi
 ```
 
-- [ ] **Step 4: Document the visible entry indicator**
+- [ ] **Step 5: Document the visible entry indicator**
 
 Insert this block immediately after the `docker compose run --rm robomimic` command in `README.md`:
 
@@ -85,7 +98,7 @@ A successful interactive startup displays a container-specific banner and prompt
 Seeing `[ROBOMIMIC CONTAINER]` means the shell is already inside the container; type commands directly, and use `exit` or `Ctrl+D` to return to the host.
 ````
 
-- [ ] **Step 5: Validate Zsh and documentation syntax before building**
+- [ ] **Step 6: Validate Zsh and documentation syntax before building**
 
 Run:
 
@@ -97,7 +110,7 @@ git diff --check
 
 Expected: PASS with prompt and README matches and no whitespace errors.
 
-- [ ] **Step 6: Build the final image once**
+- [ ] **Step 7: Build the final image once**
 
 Run:
 
@@ -107,14 +120,14 @@ env -u DISPLAY -u XAUTHORITY docker compose build
 
 Expected: PASS and rebuild `robomimic:latest` without requiring graphical environment variables.
 
-- [ ] **Step 7: Verify the prompt structure and banner function**
+- [ ] **Step 8: Verify the prompt structure and banner function**
 
 Run:
 
 ```bash
 docker compose run --rm -T robomimic /usr/bin/zsh -lic '
   [[ "$PROMPT" == *"[ROBOMIMIC CONTAINER]"* ]] || exit 1
-  [[ "$PROMPT" == *"CONDA_DEFAULT_ENV"* ]] || exit 1
+  [[ "$PROMPT" == *"robomimic_prompt_conda_env"* ]] || exit 1
   prompt_lines=("${(@f)PROMPT}")
   (( ${#prompt_lines} == 2 )) || exit 1
   (( $+functions[git_prompt_info] )) || exit 1
@@ -129,7 +142,27 @@ docker compose run --rm -T robomimic /usr/bin/zsh -lic '
 
 Expected: PASS and print `prompt-banner-ok`.
 
-- [ ] **Step 8: Verify that non-TTY scripted shells do not print the banner automatically**
+- [ ] **Step 9: Verify Conda switching does not mutate the prompt**
+
+Run:
+
+```bash
+docker compose run --rm -T robomimic /usr/bin/zsh -lic '
+  initial="$PROMPT"
+  conda activate base
+  [[ "$PROMPT" == "$initial" ]] || exit 1
+  conda activate robomimic_venv
+  [[ "$PROMPT" == "$initial" ]] || exit 1
+  CONDA_DEFAULT_ENV="%n"
+  rendered="$(print -P "$PROMPT")"
+  [[ "$rendered" == *"(%n)"* ]] || exit 1
+  print conda-prompt-ok
+'
+```
+
+Expected: PASS and print `conda-prompt-ok` without a duplicate `(base)` or `(robomimic_venv)` prefix.
+
+- [ ] **Step 10: Verify that non-TTY scripted shells do not print the banner automatically**
 
 Run:
 
@@ -141,7 +174,7 @@ if printf '%s\n' "$output" | rg -q '╭─ ROBOMIMIC CONTAINER'; then exit 1; fi
 
 Expected: PASS, print `non-tty-ok`, and contain no startup banner.
 
-- [ ] **Step 9: Commit the prompt and documentation**
+- [ ] **Step 11: Commit the prompt and documentation**
 
 ```bash
 git add docker/robomimic.zshrc README.md

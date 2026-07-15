@@ -49,6 +49,8 @@ After Oh My Zsh and Conda initialization, replace `PROMPT` with a two-line promp
 
 The prompt will reuse the `git_prompt_info` function and Git color variables loaded by `robbyrussell`. No external prompt tool or additional package is required.
 
+Set `CONDA_CHANGEPS1=false` before Conda initialization so later `conda activate` commands update `CONDA_DEFAULT_ENV` without prepending their own prompt modifier. Render the environment through a helper that doubles literal `%` characters before Zsh prompt expansion.
+
 ### Fallback Behavior
 
 If the host Oh My Zsh directory is unavailable, the existing warning remains. The custom container label, Conda environment, directory, and status arrow still render; only Git prompt information may be absent. The prompt implementation will check whether `git_prompt_info` exists before calling it.
@@ -69,6 +71,8 @@ No Dockerfile, Compose, package, mirror, GPU, or X11 changes are required.
    - `PROMPT` contains `robomimic_venv`.
    - the prompt remains two lines.
    - `git_prompt_info` is available when Oh My Zsh is mounted.
+   - switching to `base` and back to `robomimic_venv` does not mutate the prompt structure.
+   - an environment name containing `%` renders literally rather than becoming a Zsh prompt escape.
 4. Invoke `robomimic_banner` directly and require the output to contain the container name, Conda environment, and workspace.
 5. Run an interactive Compose shell to visually confirm the banner and prompt render correctly.
 6. Re-run the existing shell imports, NVIDIA GLFW renderer, and Lift physics smoke tests to confirm that the prompt-only change does not affect the runtime environment.
