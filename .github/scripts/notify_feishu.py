@@ -5,8 +5,6 @@ import hashlib
 import hmac
 import json
 import os
-import re
-import socket
 import sys
 import time
 from dataclasses import dataclass
@@ -16,6 +14,7 @@ from urllib import request as urllib_request
 
 
 REQUEST_TIMEOUT_SECONDS = 15
+MAX_RESPONSE_BYTES = 64 * 1024
 MAX_MARKDOWN_FIELD_LENGTH = 300
 
 
@@ -39,9 +38,33 @@ class PublishMetadata:
 
 def escape_markdown(value, limit=MAX_MARKDOWN_FIELD_LENGTH):
     compact = " ".join(value.split())
-    if len(compact) > limit:
-        compact = compact[: limit - 1] + "…"
-    return re.sub(r"([\\`*_~\[\]])", r"\\\1", compact)
+    tokens = []
+    for character in compact:
+        if character == "<":
+            tokens.append("＜")
+        elif character == ">":
+            tokens.append("＞")
+        elif character in "\\`*_~[]()#":
+            tokens.append(f"\\{character}")
+        else:
+            tokens.append(character)
+
+    escaped = "".join(tokens)
+    if len(escaped) <= limit:
+        return escaped
+    if limit <= 0:
+        return ""
+
+    ellipsis = "…"
+    budget = limit - len(ellipsis)
+    truncated = []
+    used = 0
+    for token in tokens:
+        if used + len(token) > budget:
+            break
+        truncated.append(token)
+        used += len(token)
+    return "".join(truncated) + ellipsis
 
 
 def make_signature(secret, timestamp):
@@ -110,9 +133,43 @@ def build_payload(metadata, signing_secret="", timestamp=None):
 
 
 def _validate_webhook_url(webhook_url):
-    parsed = urllib_parse.urlparse(webhook_url)
+    try:
+        parsed = urllib_parse.urlparse(webhook_url)
+    except (TypeError, ValueError):
+        raise NotificationError(
+            "FEISHU_WEBHOOK_URL must be a valid HTTPS URL"
+        ) from None
     if parsed.scheme != "https" or not parsed.netloc:
         raise NotificationError("FEISHU_WEBHOOK_URL must be a valid HTTPS URL")
+
+
+def _build_request(webhook_url, payload):
+    try:
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        return urllib_request.Request(
+            webhook_url,
+            data=body,
+            headers={"Content-Type": "application/json; charset=utf-8"},
+            method="POST",
+        )
+    except (TypeError, ValueError, UnicodeError):
+        raise NotificationError("Feishu webhook request failed") from None
+
+
+def _read_response(response):
+    try:
+        body = response.read(MAX_RESPONSE_BYTES + 1)
+    except Exception:
+        raise NotificationError("Feishu webhook request failed") from None
+
+    if not isinstance(body, (bytes, bytearray)):
+        raise NotificationError("Feishu webhook returned an invalid response body")
+    if len(body) > MAX_RESPONSE_BYTES:
+        raise NotificationError("Feishu webhook response exceeded size limit")
+    try:
+        return bytes(body).decode("utf-8")
+    except UnicodeDecodeError:
+        raise NotificationError("Feishu webhook returned invalid UTF-8") from None
 
 
 def send_payload(
@@ -122,20 +179,17 @@ def send_payload(
     opener=urllib_request.urlopen,
 ):
     _validate_webhook_url(webhook_url)
-    request = urllib_request.Request(
-        webhook_url,
-        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        headers={"Content-Type": "application/json; charset=utf-8"},
-        method="POST",
-    )
+    request = _build_request(webhook_url, payload)
     try:
         with opener(request, timeout=timeout) as response:
-            body = response.read().decode("utf-8")
+            body = _read_response(response)
     except urllib_error.HTTPError as exc:
         raise NotificationError(
             f"Feishu webhook returned HTTP {exc.code}"
         ) from None
-    except (urllib_error.URLError, TimeoutError, socket.timeout):
+    except NotificationError:
+        raise
+    except Exception:
         raise NotificationError("Feishu webhook request failed") from None
 
     try:
@@ -145,13 +199,22 @@ def send_payload(
 
     if not isinstance(result, dict):
         raise NotificationError("Feishu webhook returned invalid JSON")
-    if result.get("StatusCode") == 0 or result.get("code") == 0:
+
+    if "StatusCode" in result:
+        status = result["StatusCode"]
+        response_message = result.get("StatusMessage")
+    elif "code" in result:
+        status = result["code"]
+        response_message = result.get("msg")
+    else:
+        status = None
+        response_message = None
+
+    if type(status) is int and status == 0:
         return
 
     response_message = str(
-        result.get("msg")
-        or result.get("StatusMessage")
-        or "unknown business error"
+        response_message or "unknown business error"
     )
     response_message = " ".join(response_message.split())[:200]
     raise NotificationError(f"Feishu rejected notification: {response_message}")

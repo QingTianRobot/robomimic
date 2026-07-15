@@ -1,10 +1,14 @@
+import io
 import importlib.util
 import json
+import os
 import socket
 import sys
 import unittest
+from contextlib import redirect_stderr
 from pathlib import Path
 from urllib.error import HTTPError
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,6 +24,7 @@ SPEC.loader.exec_module(notify)
 class FakeResponse:
     def __init__(self, payload):
         self.payload = payload
+        self.read_sizes = []
 
     def __enter__(self):
         return self
@@ -27,10 +32,13 @@ class FakeResponse:
     def __exit__(self, exc_type, exc_value, traceback):
         return False
 
-    def read(self):
+    def read(self, size=-1):
+        self.read_sizes.append(size)
         if isinstance(self.payload, bytes):
-            return self.payload
-        return json.dumps(self.payload).encode("utf-8")
+            encoded = self.payload
+        else:
+            encoded = json.dumps(self.payload).encode("utf-8")
+        return encoded if size < 0 else encoded[:size]
 
 
 def metadata(**overrides):
@@ -48,6 +56,32 @@ def metadata(**overrides):
     }
     values.update(overrides)
     return notify.PublishMetadata(**values)
+
+
+def cli_args():
+    values = metadata()
+    return [
+        "--image",
+        values.image,
+        "--sha-tag",
+        values.sha_tag,
+        "--digest",
+        values.digest,
+        "--commit-sha",
+        values.commit_sha,
+        "--commit-message",
+        values.commit_message,
+        "--commit-author",
+        values.commit_author,
+        "--trigger",
+        values.trigger,
+        "--commit-url",
+        values.commit_url,
+        "--run-url",
+        values.run_url,
+        "--package-url",
+        values.package_url,
+    ]
 
 
 class NotifyFeishuTest(unittest.TestCase):
@@ -82,6 +116,29 @@ class NotifyFeishuTest(unittest.TestCase):
         self.assertEqual(len(escaped), 300)
         self.assertTrue(escaped.endswith("…"))
         self.assertNotIn("\n", escaped)
+
+    def test_neutralizes_feishu_mentions_tags_and_markdown_structures(self):
+        escaped = notify.escape_markdown(
+            "<at id=all></at>\n"
+            "<https://malicious.example>\n"
+            "# heading\n"
+            "> quote\n"
+            "[label](https://malicious.example)"
+        )
+
+        self.assertNotIn("<", escaped)
+        self.assertNotIn(">", escaped)
+        self.assertNotIn("[label](", escaped)
+        self.assertIn("\\# heading", escaped)
+        self.assertIn("\\[label\\]\\(", escaped)
+
+    def test_length_limit_applies_after_markdown_is_neutralized(self):
+        escaped = notify.escape_markdown("<at id=all></at>" + "*[]()" * 100, limit=40)
+
+        self.assertLessEqual(len(escaped), 40)
+        self.assertTrue(escaped.endswith("…"))
+        self.assertNotIn("<", escaped)
+        self.assertNotIn(">", escaped)
 
     def test_generates_feishu_signature_and_timestamp(self):
         self.assertEqual(
@@ -121,6 +178,11 @@ class NotifyFeishuTest(unittest.TestCase):
                 json.loads(captured["request"].data.decode("utf-8")),
                 {"msg_type": "interactive"},
             )
+            self.assertEqual(captured["request"].get_method(), "POST")
+            self.assertEqual(
+                captured["request"].get_header("Content-type"),
+                "application/json; charset=utf-8",
+            )
 
     def test_rejects_missing_or_non_https_webhook(self):
         for webhook in ("", "http://open.feishu.cn/hook/example", "not-a-url"):
@@ -130,6 +192,13 @@ class NotifyFeishuTest(unittest.TestCase):
                     "valid HTTPS URL",
                 ):
                     notify.send_payload(webhook, {})
+
+    def test_rejects_malformed_https_url_as_notification_error(self):
+        with self.assertRaisesRegex(
+            notify.NotificationError,
+            "valid HTTPS URL",
+        ):
+            notify.send_payload("https://[malformed", {})
 
     def test_reports_http_errors_without_echoing_url(self):
         webhook = "https://open.feishu.cn/open-apis/bot/v2/hook/private"
@@ -152,9 +221,69 @@ class NotifyFeishuTest(unittest.TestCase):
                 opener=opener,
             )
 
+    def test_wraps_response_read_failures_without_echoing_url(self):
+        webhook = "https://open.feishu.cn/open-apis/bot/v2/hook/private"
+
+        class ReadFailureResponse(FakeResponse):
+            def read(self, size=-1):
+                raise ConnectionResetError(f"connection reset while reading {webhook}")
+
+        def opener(request, timeout):
+            return ReadFailureResponse({})
+
+        with self.assertRaisesRegex(
+            notify.NotificationError,
+            "request failed",
+        ) as caught:
+            notify.send_payload(webhook, {}, opener=opener)
+        self.assertNotIn(webhook, str(caught.exception))
+
+    def test_rejects_non_utf8_response_without_echoing_url(self):
+        webhook = "https://open.feishu.cn/open-apis/bot/v2/hook/private"
+
+        def opener(request, timeout):
+            return FakeResponse(b"\xff\xfe")
+
+        with self.assertRaisesRegex(
+            notify.NotificationError,
+            "invalid UTF-8",
+        ) as caught:
+            notify.send_payload(webhook, {}, opener=opener)
+        self.assertNotIn(webhook, str(caught.exception))
+
+    def test_limits_response_body_reads(self):
+        body = (
+            b'{"code": 0, "padding": "'
+            + b"x" * (notify.MAX_RESPONSE_BYTES + 1)
+            + b'"}'
+        )
+        response = FakeResponse(body)
+
+        def opener(request, timeout):
+            return response
+
+        with self.assertRaisesRegex(notify.NotificationError, "size limit"):
+            notify.send_payload(
+                "https://open.feishu.cn/open-apis/bot/v2/hook/example",
+                {},
+                opener=opener,
+            )
+        self.assertEqual(response.read_sizes, [notify.MAX_RESPONSE_BYTES + 1])
+
     def test_rejects_malformed_json_response(self):
         def opener(request, timeout):
             return FakeResponse(b"not-json")
+
+        with self.assertRaisesRegex(notify.NotificationError, "invalid JSON"):
+            notify.send_payload(
+                "https://open.feishu.cn/open-apis/bot/v2/hook/example",
+                {},
+                opener=opener,
+            )
+
+    def test_rejects_non_object_json_response(self):
+        def opener(request, timeout):
+            return FakeResponse([{"code": 0}])
 
         with self.assertRaisesRegex(notify.NotificationError, "invalid JSON"):
             notify.send_payload(
@@ -177,6 +306,27 @@ class NotifyFeishuTest(unittest.TestCase):
                 opener=opener,
             )
 
+    def test_success_code_requires_integer_zero_and_unambiguous_schema(self):
+        rejected_responses = (
+            {"StatusCode": True, "StatusMessage": "not an integer status"},
+            {"code": False, "msg": "not an integer status"},
+            {
+                "StatusCode": 1,
+                "StatusMessage": "legacy failure",
+                "code": 0,
+                "msg": "conflicting success",
+            },
+        )
+
+        for response_payload in rejected_responses:
+            with self.subTest(response_payload=response_payload):
+                with self.assertRaisesRegex(notify.NotificationError, "rejected"):
+                    notify.send_payload(
+                        "https://open.feishu.cn/open-apis/bot/v2/hook/example",
+                        {},
+                        opener=lambda request, timeout: FakeResponse(response_payload),
+                    )
+
     def test_redacts_all_sensitive_values_from_errors(self):
         webhook = "https://open.feishu.cn/open-apis/bot/v2/hook/private"
         secret = "private-signing-secret"
@@ -187,6 +337,29 @@ class NotifyFeishuTest(unittest.TestCase):
         self.assertNotIn(webhook, message)
         self.assertNotIn(secret, message)
         self.assertEqual(message.count("[REDACTED]"), 2)
+
+    def test_main_returns_error_without_leaking_webhook_or_secret(self):
+        webhook = "https://open.feishu.cn/open-apis/bot/v2/hook/private"
+        secret = "private-signing-secret"
+        error = notify.NotificationError(f"request {webhook} used {secret}")
+        stderr = io.StringIO()
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "FEISHU_WEBHOOK_URL": webhook,
+                "FEISHU_WEBHOOK_SECRET": secret,
+            },
+        ), mock.patch.object(notify, "send_payload", side_effect=error), redirect_stderr(
+            stderr
+        ):
+            result = notify.main(cli_args())
+
+        output = stderr.getvalue()
+        self.assertEqual(result, 1)
+        self.assertIn("Feishu notification failed", output)
+        self.assertNotIn(webhook, output)
+        self.assertNotIn(secret, output)
 
 
 if __name__ == "__main__":
