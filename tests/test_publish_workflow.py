@@ -67,7 +67,7 @@ def indented_block(text, marker):
 
 def assert_exact_root_permissions(test_case, workflow):
     permission_keys = re.findall(
-        r"(?m)^[ \t]*permissions[ \t]*:",
+        r'''(?m)^[ \t]*(?:permissions|'permissions'|"permissions")[ \t]*:''',
         workflow,
     )
     test_case.assertEqual(permission_keys, ["permissions:"])
@@ -80,7 +80,8 @@ def assert_exact_root_permissions(test_case, workflow):
 
 
 def assert_publish_step_order(test_case, workflow):
-    lines = workflow.splitlines()
+    publish_job = indented_block(workflow, "  publish:")
+    lines = publish_job.splitlines()
     positions = []
     for step_name in PUBLISH_STEP_ORDER:
         marker = f"      - name: {step_name}"
@@ -122,6 +123,16 @@ class PublishWorkflowTest(unittest.TestCase):
             self.workflow.replace(
                 "  publish:\n",
                 "  publish:\n    permissions: {contents: read, packages: write}\n",
+                1,
+            ),
+            self.workflow.replace(
+                "jobs:\n",
+                "'permissions': write-all\n\njobs:\n",
+                1,
+            ),
+            self.workflow.replace(
+                "  publish:\n",
+                '  publish:\n    "permissions": {contents: read, packages: write}\n',
                 1,
             ),
         )
@@ -220,6 +231,20 @@ class PublishWorkflowTest(unittest.TestCase):
         )
 
         notify_marker = "      - name: Send Feishu publication card"
+        notifier_test_marker = "      - name: Run notifier tests"
+        notifier_test_step = indented_block(self.workflow, notifier_test_marker)
+        moved_test_step = self.workflow.replace(notifier_test_step, "", 1).replace(
+            "  publish:\n",
+            "  validation:\n"
+            "    runs-on: ubuntu-latest\n"
+            "    steps:\n"
+            f"{notifier_test_step}"
+            "  publish:\n",
+            1,
+        )
+        with self.assertRaises(AssertionError):
+            assert_publish_step_order(self, moved_test_step)
+
         notify = indented_block(self.workflow, notify_marker)
         self.assertEqual(
             re.findall(r"(?m)^        if:\s*(.+)$", notify),
