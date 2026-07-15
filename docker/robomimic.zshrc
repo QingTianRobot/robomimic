@@ -23,3 +23,21 @@ if [[ -r /opt/conda/etc/profile.d/conda.sh ]]; then
   source /opt/conda/etc/profile.d/conda.sh
   conda activate robomimic_venv
 fi
+
+robomimic_banner() {
+  print -P '%F{yellow}%B╭─ ROBOMIMIC CONTAINER ─────────────────────╮%b%f'
+  print -P '%F{yellow}%B│%b%f %F{magenta}env: robomimic_venv%f                       %F{yellow}%B│%b%f'
+  print -P '%F{yellow}%B│%b%f %F{cyan}workspace: /opt/robomimic%f                 %F{yellow}%B│%b%f'
+  print -P '%F{yellow}%B╰───────────────────────────────────────────╯%b%f'
+}
+
+setopt prompt_subst
+PROMPT='%F{yellow}%B[ROBOMIMIC CONTAINER]%b%f %F{magenta}(${CONDA_DEFAULT_ENV:-no-conda})%f %F{cyan}%~%f'
+if (( $+functions[git_prompt_info] )); then
+  PROMPT+=' $(git_prompt_info)'
+fi
+PROMPT+=$'\n''%(?:%F{green}➜:%F{red}➜)%f '
+
+if [[ -o interactive && -t 1 ]]; then
+  robomimic_banner
+fi

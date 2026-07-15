@@ -92,6 +92,20 @@ Open the repository in an interactive Zsh shell with `robomimic_venv` activated:
 docker compose run --rm robomimic
 ```
 
+A successful interactive startup displays a container-specific banner and prompt:
+
+```text
+╭─ ROBOMIMIC CONTAINER ─────────────────────╮
+│ env: robomimic_venv                       │
+│ workspace: /opt/robomimic                 │
+╰───────────────────────────────────────────╯
+
+[ROBOMIMIC CONTAINER] (robomimic_venv) /opt/robomimic git:(master)
+➜
+```
+
+Seeing `[ROBOMIMIC CONTAINER]` means the shell is already inside the container; type commands directly, and use `exit` or `Ctrl+D` to return to the host.
+
 The repository is bind-mounted at `/opt/robomimic`, so local source edits are immediately visible to the editable installation. The host Oh My Zsh directory is mounted read-only; the container uses the same `robbyrussell` theme and plugin selection without sourcing host-only Conda, ROS, Julia, or local-tool paths.
 
 The development container runs as root. Files created under the bind-mounted repository, such as training outputs or caches, can therefore become root-owned on the host.
