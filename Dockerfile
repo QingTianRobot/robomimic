@@ -63,5 +63,23 @@ RUN /opt/conda/bin/conda run -n robomimic_venv pip install -r requirements-docs.
 # Set the working directory
 WORKDIR /workspace
 
-# Activate Conda environment and start bash when container starts
-CMD ["/bin/bash", "-c", "source /opt/conda/etc/profile.d/conda.sh && conda activate robomimic_venv && bash"]
+# Install Zsh through a domestic Ubuntu mirror near the end to preserve existing build cache
+ARG UBUNTU_APT_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/ubuntu
+RUN sed -i \
+        -e "s|http://archive.ubuntu.com/ubuntu/|${UBUNTU_APT_MIRROR}/|g" \
+        -e "s|http://security.ubuntu.com/ubuntu/|${UBUNTU_APT_MIRROR}/|g" \
+        /etc/apt/sources.list && \
+    apt-get update && apt-get install -y --no-install-recommends zsh && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY docker/robomimic-entrypoint.sh /usr/local/bin/robomimic-entrypoint
+COPY docker/robomimic.zshrc /root/.zshrc
+RUN chmod 0755 /usr/local/bin/robomimic-entrypoint && \
+    mkdir -p /tmp/oh-my-zsh-cache
+
+ENV SHELL=/usr/bin/zsh \
+    ZSH=/root/.oh-my-zsh \
+    ZSH_CACHE_DIR=/tmp/oh-my-zsh-cache
+
+ENTRYPOINT ["/usr/local/bin/robomimic-entrypoint"]
+CMD ["/usr/bin/zsh", "-l"]
