@@ -115,6 +115,8 @@ The language-conditioned policy uses `openai/clip-vit-large-patch14` to generate
 
 Create the host cache directory and populate it:
 
+The first download of `openai/clip-vit-large-patch14` fetches approximately 1.7 GB of model weights. Ensure that the host has enough disk space and allow for the required network traffic and download time before running the command.
+
 ```bash
 mkdir -p models/huggingface
 docker compose run --rm -T robomimic python -c "import robomimic.utils.lang_utils; print('clip-download-ok')"
@@ -126,7 +128,7 @@ The default endpoint is the domestic mirror `https://hf-mirror.com`. If the mirr
 HF_ENDPOINT=https://huggingface.co docker compose run --rm -T robomimic python -c "import robomimic.utils.lang_utils; print('clip-download-ok')"
 ```
 
-After the download completes, verify that the persistent cache works without network access:
+After the download completes, verify the persistent cache with Hugging Face Hub and Transformers offline mode enabled:
 
 ```bash
 docker compose run --rm -T -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 robomimic python -c "from robomimic.utils.lang_utils import get_lang_emb; embedding = get_lang_emb('pick up the cube'); print('clip-offline-ok', embedding.shape)"
