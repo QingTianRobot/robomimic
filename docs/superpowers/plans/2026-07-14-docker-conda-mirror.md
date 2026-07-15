@@ -1,26 +1,26 @@
-# Docker Conda Mirror Implementation Plan
+# Docker Domestic Mirrors and Local Source Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make `docker build -t robomimic .` complete without accepting Anaconda default-channel Terms of Service by routing Conda downloads through the Tsinghua University mirror.
+**Goal:** Build `robomimic:latest` from the current local source without accepting Anaconda Terms of Service or accessing GitHub during the Docker build.
 
-**Architecture:** Preserve the existing CUDA base image, Miniconda installation, Conda environment name, and dependency versions. Add a single Conda configuration layer before environment creation so `defaults` and named channels resolve to domestic mirror URLs, then validate the complete image and its installed Python packages.
+**Architecture:** Preserve the CUDA, Ubuntu, Miniconda, Python, and PyTorch layers. Route Conda and pip through Tsinghua University mirrors, copy a filtered local workspace into `/opt/robomimic`, install it in editable mode, and install the compatible `robosuite==1.5.1` PyPI distribution.
 
-**Tech Stack:** Docker BuildKit, Ubuntu 20.04, Miniconda, Tsinghua Anaconda mirror, Python 3.9, PyTorch, robomimic, robosuite.
+**Tech Stack:** Docker BuildKit, Ubuntu 20.04, Miniconda, Tsinghua Anaconda/PyPI mirrors, Python 3.9, PyTorch 2.0.0, robomimic, robosuite 1.5.1.
 
 ---
 
 ## File structure
 
-- Modify `Dockerfile`: configure Conda mirror endpoints before creating `robomimic_venv`.
-- No permanent test file is needed: the production Docker build is the regression test because the failure occurs while executing the Dockerfile itself.
+- Create `.dockerignore`: exclude Git metadata, development caches, local environments, datasets, videos, model files, and large documentation images from the Docker build context.
+- Modify `Dockerfile`: retain the Conda mirror fix, remove GitHub cloning and proxy configuration, configure pip, copy local source, and install robosuite from PyPI.
 
-### Task 1: Preserve the failing regression evidence
+### Task 1: Preserve regression evidence
 
 **Files:**
-- Test: `Dockerfile:33`
+- Test: `Dockerfile`
 
-- [ ] **Step 1: Run the current build and verify the expected failure**
+- [x] **Step 1: Record the original Conda failure**
 
 Run:
 
@@ -28,46 +28,106 @@ Run:
 docker build -t robomimic .
 ```
 
-Expected: FAIL at the `conda create -n robomimic_venv python=3.9 -y` layer with `CondaToSNonInteractiveError` naming `https://repo.anaconda.com/pkgs/main` and `https://repo.anaconda.com/pkgs/r`. This failure was reproduced before implementation and is the RED state.
+Observed: FAIL at `conda create` with `CondaToSNonInteractiveError` for `repo.anaconda.com/pkgs/main` and `repo.anaconda.com/pkgs/r`.
 
-### Task 2: Configure domestic Conda channels
+- [x] **Step 2: Record the GitHub failures after the Conda fix**
+
+Observed: direct GitHub timed out; two acceleration services failed with GnuTLS; a third service returned `ls-remote` but stalled on complete repository and archive transfers. This is the RED state for removing build-time GitHub access.
+
+### Task 2: Filter the local Docker context
 
 **Files:**
-- Modify: `Dockerfile:32`
+- Create: `.dockerignore`
 
-- [ ] **Step 1: Add the minimal Conda configuration layer**
+- [ ] **Step 1: Create `.dockerignore` with exact exclusions**
 
-Insert this block after the Miniconda installation and before `conda create`:
-
-```dockerfile
-# Use domestic Conda mirrors and avoid the Anaconda default-channel ToS prompt
-RUN /opt/conda/bin/conda config --system --remove-key default_channels || true && \
-    /opt/conda/bin/conda config --system --add default_channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main && \
-    /opt/conda/bin/conda config --system --add default_channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/r && \
-    /opt/conda/bin/conda config --system --set channel_alias https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud && \
-    /opt/conda/bin/conda config --system --set show_channel_urls true
+```dockerignore
+.git
+.github
+.idea
+.vscode
+**/__pycache__
+**/*.py[cod]
+.pytest_cache
+.mypy_cache
+.venv
+venv
+env
+build
+dist
+**/*.egg-info
+docs/_build
+docs/images
+tests/assets
+**/*.hdf5
+**/*.mp4
+**/*.pth
 ```
 
-Do not add `conda tos accept`, change package versions, or change unrelated download sources.
+These exclusions retain `setup.py`, `README.md`, `MANIFEST.in`, `requirements-docs.txt`, the `robomimic` package, examples, tests, and documentation sources required by the build.
 
-- [ ] **Step 2: Check Dockerfile syntax and review the exact diff**
+- [ ] **Step 2: Verify the ignore file contains no whitespace errors**
+
+Run:
+
+```bash
+git diff --check
+git diff -- .dockerignore
+```
+
+Expected: PASS; the diff contains only the exclusions above.
+
+### Task 3: Install local source and robosuite from domestic PyPI
+
+**Files:**
+- Modify: `Dockerfile:39-58`
+
+- [ ] **Step 1: Remove GitHub proxy and clone instructions**
+
+Delete the `GITHUB_PROXY` argument and both `git clone` commands. Keep the verified Conda mirror configuration unchanged.
+
+- [ ] **Step 2: Add pip mirror configuration and local-source installation**
+
+Replace the source installation portion with:
+
+```dockerfile
+# Use a domestic PyPI mirror for Python dependencies
+ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+ENV PIP_INDEX_URL=${PIP_INDEX_URL}
+
+# Install the current robomimic source tree
+WORKDIR /opt/robomimic
+COPY . .
+RUN /opt/conda/bin/conda run -n robomimic_venv pip install -e .
+
+# Install the robosuite version recommended for the current datasets
+RUN /opt/conda/bin/conda run -n robomimic_venv pip install robosuite==1.5.1
+
+# Optional: Install robomimic documentation dependencies
+RUN /opt/conda/bin/conda run -n robomimic_venv pip install -r requirements-docs.txt
+```
+
+Keep the final `WORKDIR /workspace` and existing `CMD` unchanged.
+
+- [ ] **Step 3: Check Dockerfile syntax and review the combined diff**
 
 Run:
 
 ```bash
 docker build --check .
 git diff --check
-git diff -- Dockerfile
+git diff -- Dockerfile .dockerignore
 ```
 
-Expected: Docker build check and whitespace check exit successfully; the diff contains only the mirror configuration layer.
+Expected: Docker build check reports no warnings; the production Dockerfile contains no `github.com`, GitHub proxy, or `git clone` string.
 
-### Task 3: Build the corrected image
+### Task 4: Build the corrected image
 
 **Files:**
 - Test: `Dockerfile`
+- Test: `.dockerignore`
 
-- [ ] **Step 1: Run the regression command again**
+- [ ] **Step 1: Run the complete regression build**
 
 Run:
 
@@ -75,13 +135,13 @@ Run:
 docker build --progress=plain -t robomimic .
 ```
 
-Expected: PASS with exit code 0 and an exported image tagged `robomimic:latest`. The `conda create` output must show Tsinghua mirror URLs and must not raise `CondaToSNonInteractiveError`.
+Expected: PASS with exit code 0 and an exported `robomimic:latest` image. The log shows a small transferred build context, cached system/Conda/PyTorch layers where available, Tsinghua PyPI URLs for Python downloads, and no GitHub request.
 
-- [ ] **Step 2: If a later source fails, isolate it before changing configuration**
+- [ ] **Step 2: If a package fails, isolate the exact mirror artifact**
 
-Use the first failing URL and Dockerfile layer from the build log. Keep the Conda mirror change unchanged, and make no additional source change unless the log proves that specific source is unavailable or unacceptably slow.
+Use the first failing package name and URL from the build log. Do not add a GitHub dependency or change unrelated versions. The verified robosuite target is exactly `1.5.1`.
 
-### Task 4: Verify the built runtime
+### Task 5: Verify the built runtime
 
 **Files:**
 - Test: built image `robomimic:latest`
@@ -96,40 +156,41 @@ docker image inspect robomimic:latest --format '{{.Id}}'
 
 Expected: PASS and print a `sha256:` image identifier.
 
-- [ ] **Step 2: Verify Python and required imports inside the Conda environment**
+- [ ] **Step 2: Verify Python, packages, versions, and local source path**
 
 Run:
 
 ```bash
-docker run --rm robomimic:latest /opt/conda/bin/conda run -n robomimic_venv python -c "import sys, torch, robomimic, robosuite; assert sys.version_info[:2] == (3, 9); print(sys.version.split()[0]); print(torch.__version__); print('imports-ok')"
+docker run --rm robomimic:latest /opt/conda/bin/conda run -n robomimic_venv python -c "import importlib.metadata as metadata, pathlib, sys, torch, robomimic, robosuite; assert sys.version_info[:2] == (3, 9); assert metadata.version('robosuite') == '1.5.1'; assert str(pathlib.Path(robomimic.__file__).resolve()).startswith('/opt/robomimic/'); print(sys.version.split()[0]); print(torch.__version__); print(metadata.version('robosuite')); print(robomimic.__file__); print('imports-ok')"
 ```
 
-Expected: PASS and print a Python `3.9.x` version, the installed PyTorch version, and `imports-ok`.
+Expected: PASS and print Python `3.9.x`, PyTorch `2.0.0`, robosuite `1.5.1`, a robomimic path below `/opt/robomimic`, and `imports-ok`.
 
-### Task 5: Record the implementation
+### Task 6: Record the implementation
 
 **Files:**
+- Create: `.dockerignore`
 - Modify: `Dockerfile`
 
-- [ ] **Step 1: Confirm the final worktree contains only intended changes**
+- [ ] **Step 1: Confirm the final worktree contains only intended implementation changes**
 
 Run:
 
 ```bash
 git status --short
 git diff --check
-git diff -- Dockerfile
+git diff -- Dockerfile .dockerignore
 ```
 
-Expected: only the intended Dockerfile change is uncommitted, with no whitespace errors.
+Expected: only `Dockerfile` and `.dockerignore` are uncommitted implementation changes, with no whitespace errors.
 
-- [ ] **Step 2: Commit the Dockerfile fix**
+- [ ] **Step 2: Commit the implementation**
 
 Run:
 
 ```bash
-git add Dockerfile
-git commit -m "fix: use domestic conda mirrors in Docker build"
+git add Dockerfile .dockerignore
+git commit -m "fix: build Docker image from local source"
 ```
 
-Expected: a new commit containing only the Dockerfile mirror configuration.
+Expected: a new commit containing the domestic mirror configuration, local-source copy, robosuite pin, and Docker context exclusions.
