@@ -77,6 +77,25 @@ Build the image:
 docker compose build
 ```
 
+### Published image and Feishu notifications
+
+Pushes to `master` automatically publish a Linux AMD64 image to GitHub Container Registry. The workflow can also be started manually only from `master` with **Actions → Publish Docker image → Run workflow**.
+
+After the first successful publication, open the GHCR Package Settings and change the package visibility to **Public**. Public images can then be pulled without authentication:
+
+```bash
+docker pull ghcr.io/qingtianrobot/robomimic:latest
+```
+
+Each publication also creates an immutable traceable tag in the form `ghcr.io/qingtianrobot/robomimic:sha-<short-sha>` and records the image digest in the workflow output.
+
+To enable the success notification, configure repository secrets under **Settings → Secrets and variables → Actions**:
+
+- `FEISHU_WEBHOOK_URL` — required custom-bot webhook URL
+- `FEISHU_WEBHOOK_SECRET` — optional signing secret when signature verification is enabled
+
+Only a successfully pushed image sends a purple Feishu card. The card includes the image references, digest, linked commit and author, and links to the workflow run and GHCR package. Build or push failures do not send a notification.
+
 The graphical Compose workflow requires:
 
 - Linux with a local X11 or Xwayland desktop session
