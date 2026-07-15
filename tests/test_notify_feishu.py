@@ -132,7 +132,7 @@ class NotifyFeishuTest(unittest.TestCase):
         self.assertIn("Fix \\*unsafe\\* \\[card\\] content", markdown)
         self.assertIn("Robot\\_Author", markdown)
         self.assertIn("`push`", markdown)
-        self.assertIn(f"[查看流水线]({metadata().run_url})", markdown)
+        self.assertIn(f"[查看 GitHub Action]({metadata().run_url})", markdown)
         self.assertIn(
             f"[ghcr.io/qingtianrobot/robomimic]({metadata().package_url})",
             markdown,
@@ -162,6 +162,10 @@ class NotifyFeishuTest(unittest.TestCase):
         self.assertIn("关键词：Docker image published", markdown)
 
         actions = card["elements"][1]["actions"]
+        self.assertEqual(
+            actions[0]["text"]["content"],
+            "查看 GitHub Action",
+        )
         self.assertEqual(actions[0]["url"], metadata().run_url)
         self.assertEqual(actions[1]["url"], metadata().package_url)
 

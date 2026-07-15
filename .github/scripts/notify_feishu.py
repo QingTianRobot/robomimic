@@ -117,7 +117,7 @@ def build_payload(metadata, signing_secret="", timestamp=None):
             "**触发方式**",
             f"`{escape_markdown(metadata.trigger)}`",
             "**流水线**",
-            f"[查看流水线]({metadata.run_url})",
+            f"[查看 GitHub Action]({metadata.run_url})",
             "**镜像包**",
             f"[{metadata.image}]({metadata.package_url})",
             "**拉取命令**",
@@ -158,7 +158,10 @@ def build_payload(metadata, signing_secret="", timestamp=None):
                     "actions": [
                         {
                             "tag": "button",
-                            "text": {"tag": "plain_text", "content": "查看 Workflow"},
+                            "text": {
+                                "tag": "plain_text",
+                                "content": "查看 GitHub Action",
+                            },
                             "type": "primary",
                             "url": metadata.run_url,
                         },
