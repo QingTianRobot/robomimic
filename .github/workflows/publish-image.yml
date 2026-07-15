@@ -1,0 +1,92 @@
+name: Publish Docker image
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-image-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: ghcr.io/qingtianrobot/robomimic
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run notifier tests
+        run: |
+          python -m unittest tests/test_notify_feishu.py
+          python -m unittest tests/test_publish_workflow.py
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image metadata
+        id: metadata
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=short,prefix=sha-
+          labels: |
+            org.opencontainers.image.title=robomimic
+            org.opencontainers.image.description=robomimic GPU/X11 development image
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Send Feishu publication card
+        if: ${{ success() }}
+        env:
+          FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+          FEISHU_WEBHOOK_SECRET: ${{ secrets.FEISHU_WEBHOOK_SECRET }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python .github/scripts/notify_feishu.py \
+            --image "$IMAGE_NAME" \
+            --sha-tag "sha-${GITHUB_SHA::7}" \
+            --digest "$IMAGE_DIGEST" \
+            --commit-sha "$GITHUB_SHA" \
+            --commit-message "$(git log -1 --pretty=%s)" \
+            --commit-author "$(git log -1 --pretty=%an)" \
+            --trigger "$EVENT_NAME" \
+            --commit-url "https://github.com/$GITHUB_REPOSITORY/commit/$GITHUB_SHA" \
+            --run-url "https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --package-url "https://github.com/$GITHUB_REPOSITORY/pkgs/container/robomimic"
