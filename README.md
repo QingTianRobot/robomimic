@@ -109,6 +109,31 @@ The repository is bind-mounted at `/opt/robomimic`, so local source edits are im
 
 The development container runs as root. Files created under the bind-mounted repository, such as training outputs or caches, can therefore become root-owned on the host.
 
+### Persist the CLIP language model
+
+The language-conditioned policy uses `openai/clip-vit-large-patch14` to generate 768-dimensional language embeddings. The host directory `models/huggingface` is mounted at `/opt/models/huggingface` in the container so that downloaded weights, configuration, tokenizer files, and Hugging Face metadata persist across container runs.
+
+Create the host cache directory and populate it:
+
+```bash
+mkdir -p models/huggingface
+docker compose run --rm -T robomimic python -c "import robomimic.utils.lang_utils; print('clip-download-ok')"
+```
+
+The default endpoint is the domestic mirror `https://hf-mirror.com`. If the mirror fails, retry the download command with the official endpoint for that invocation only:
+
+```bash
+HF_ENDPOINT=https://huggingface.co docker compose run --rm -T robomimic python -c "import robomimic.utils.lang_utils; print('clip-download-ok')"
+```
+
+After the download completes, verify that the persistent cache works without network access:
+
+```bash
+docker compose run --rm -T -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 robomimic python -c "from robomimic.utils.lang_utils import get_lang_emb; embedding = get_lang_emb('pick up the cube'); print('clip-offline-ok', embedding.shape)"
+```
+
+The expected output is `clip-offline-ok torch.Size([768])`. The repository-root `/models/` directory is excluded from both Git and the Docker build context, so the model cache remains only on the host.
+
 From the Compose shell, launch the robosuite random-action GUI demo:
 
 ```bash
