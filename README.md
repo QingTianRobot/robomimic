@@ -69,16 +69,40 @@ The robomimic framework also makes reproducing the results from different benchm
 
 ## Docker
 
-You can use the `Dockerfile` to easily build a containerized environment for setting up robomimic with Python 3.9, Miniconda, robosuite, and PyTorch (CPU/GPU support).
+The Docker image provides Python 3.9, Miniconda, robosuite, MuJoCo, PyTorch, Zsh, and a Compose-based GPU/X11 development shell. Conda, pip, and the additional Zsh installation use domestic mirrors where available.
 
-To build, run:
-`docker build -t robomimic .`
+Build the image:
 
-To run without GPU (CPU only), run:
-`docker run -it robomimic`
+```bash
+docker compose build
+```
 
-To run with GPU (if available), run:
-`docker run --gpus all -it robomimic`
+The graphical Compose workflow requires:
+
+- Linux with a local X11 or Xwayland desktop session
+- NVIDIA Container Toolkit
+- `DISPLAY` and `XAUTHORITY` exported by the desktop session
+- Oh My Zsh installed at `${HOME}/.oh-my-zsh`
+
+Open the repository in an interactive Zsh shell with `robomimic_venv` activated:
+
+```bash
+docker compose run --rm robomimic
+```
+
+The repository is bind-mounted at `/opt/robomimic`, so local source edits are immediately visible to the editable installation. The host Oh My Zsh directory is mounted read-only; the container uses the same `robbyrussell` theme and plugin selection without sourcing host-only Conda, ROS, Julia, or local-tool paths.
+
+From the Compose shell, launch the robosuite random-action GUI demo:
+
+```bash
+python /opt/conda/envs/robomimic_venv/lib/python3.9/site-packages/robosuite/demos/demo_random_action.py
+```
+
+For a direct image build without Compose:
+
+```bash
+docker build -t robomimic .
+```
 
 ## Troubleshooting
 
