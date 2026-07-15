@@ -17,10 +17,15 @@ services:
       MUJOCO_GL: glfw
       NVIDIA_DRIVER_CAPABILITIES: all
       ZSH_CACHE_DIR: /tmp/oh-my-zsh-cache
+      HF_HOME: /opt/models/huggingface
+      HF_ENDPOINT: ${HF_ENDPOINT:-https://hf-mirror.com}
     volumes:
       - type: bind
         source: .
         target: /opt/robomimic
+      - type: bind
+        source: ./models/huggingface
+        target: /opt/models/huggingface
       - type: bind
         source: /tmp/.X11-unix
         target: /tmp/.X11-unix
