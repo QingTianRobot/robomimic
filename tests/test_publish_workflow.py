@@ -169,9 +169,14 @@ class PublishWorkflowTest(unittest.TestCase):
             self.workflow,
             "      - name: Check out repository",
         )
-        self.assertIn(
-            "        with:\n          persist-credentials: false",
-            checkout,
+        checkout_with = indented_block(checkout, "        with:")
+        self.assertEqual(
+            checkout_with.splitlines(),
+            [
+                "        with:",
+                "          persist-credentials: false",
+                "          fetch-depth: 0",
+            ],
         )
 
     def test_metadata_tags_and_build_cache_are_scoped_to_their_steps(self):
@@ -261,6 +266,7 @@ class PublishWorkflowTest(unittest.TestCase):
                 "          FEISHU_WEBHOOK_SECRET: ${{ secrets.FEISHU_WEBHOOK_SECRET }}",
                 "          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}",
                 "          EVENT_NAME: ${{ github.event_name }}",
+                "          BEFORE_SHA: ${{ github.event.before }}",
             ],
         )
         for secret in (
@@ -293,6 +299,24 @@ class PublishWorkflowTest(unittest.TestCase):
             '--commit-author="$(git log -1 --pretty=%an)"',
             notify,
         )
+        self.assertIn('--repository="$GITHUB_REPOSITORY"', notify)
+        self.assertIn('--ref-name="$GITHUB_REF_NAME"', notify)
+        self.assertIn('--changes="$changes"', notify)
+
+        self.assertIn('[[ "$EVENT_NAME" == "push" ]]', notify)
+        self.assertIn('[[ "$BEFORE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]', notify)
+        self.assertIn(
+            '[[ "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]]',
+            notify,
+        )
+        self.assertIn('git cat-file -e "${BEFORE_SHA}^{commit}"', notify)
+        self.assertIn(
+            "git log --max-count=8 --pretty='%h %s' "
+            '"${BEFORE_SHA}..${GITHUB_SHA}"',
+            notify,
+        )
+        self.assertIn('if [[ -z "$changes" ]]; then', notify)
+        self.assertIn("git log -1 --pretty='%h %s' \"$GITHUB_SHA\"", notify)
 
 
 if __name__ == "__main__":

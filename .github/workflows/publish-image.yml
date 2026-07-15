@@ -27,6 +27,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
@@ -81,15 +82,30 @@ jobs:
           FEISHU_WEBHOOK_SECRET: ${{ secrets.FEISHU_WEBHOOK_SECRET }}
           IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
           EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
         run: |
+          changes=""
+          if [[ "$EVENT_NAME" == "push" ]] &&
+             [[ "$BEFORE_SHA" =~ ^[0-9a-fA-F]{40}$ ]] &&
+             [[ "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]] &&
+             git cat-file -e "${BEFORE_SHA}^{commit}" 2>/dev/null; then
+            changes="$(git log --max-count=8 --pretty='%h %s' "${BEFORE_SHA}..${GITHUB_SHA}")"
+          fi
+          if [[ -z "$changes" ]]; then
+            changes="$(git log -1 --pretty='%h %s' "$GITHUB_SHA")"
+          fi
+
           python .github/scripts/notify_feishu.py \
             --image "$IMAGE_NAME" \
             --sha-tag "sha-${GITHUB_SHA::7}" \
             --digest "$IMAGE_DIGEST" \
+            --repository="$GITHUB_REPOSITORY" \
+            --ref-name="$GITHUB_REF_NAME" \
             --commit-sha "$GITHUB_SHA" \
             --commit-message="$(git log -1 --pretty=%s)" \
             --commit-author="$(git log -1 --pretty=%an)" \
             --trigger "$EVENT_NAME" \
+            --changes="$changes" \
             --commit-url "https://github.com/$GITHUB_REPOSITORY/commit/$GITHUB_SHA" \
             --run-url "https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             --package-url "https://github.com/$GITHUB_REPOSITORY/pkgs/container/robomimic"

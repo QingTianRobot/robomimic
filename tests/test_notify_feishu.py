@@ -13,6 +13,7 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / ".github" / "scripts" / "notify_feishu.py"
+FULL_DIGEST = "sha256:" + "0123456789abcdef" * 4
 SPEC = importlib.util.spec_from_file_location("notify_feishu", MODULE_PATH)
 assert SPEC is not None
 assert SPEC.loader is not None
@@ -45,12 +46,15 @@ def metadata(**overrides):
     values = {
         "image": "ghcr.io/qingtianrobot/robomimic",
         "sha_tag": "sha-1234567",
-        "digest": "sha256:abc123",
-        "commit_sha": "1234567890abcdef",
+        "digest": FULL_DIGEST,
+        "repository": "QingTianRobot/robomimic",
+        "ref_name": "master",
+        "commit_sha": "1234567890abcdef1234567890abcdef12345678",
         "commit_message": "Fix *unsafe* [card]\ncontent",
         "commit_author": "Robot_Author",
         "trigger": "push",
-        "commit_url": "https://github.com/QingTianRobot/robomimic/commit/1234567890abcdef",
+        "changes": "1234567 Fix first change\n89abcde Add second change",
+        "commit_url": "https://github.com/QingTianRobot/robomimic/commit/1234567890abcdef1234567890abcdef12345678",
         "run_url": "https://github.com/QingTianRobot/robomimic/actions/runs/42",
         "package_url": "https://github.com/QingTianRobot/robomimic/pkgs/container/robomimic",
     }
@@ -67,6 +71,10 @@ def cli_args():
         values.sha_tag,
         "--digest",
         values.digest,
+        "--repository",
+        values.repository,
+        "--ref-name",
+        values.ref_name,
         "--commit-sha",
         values.commit_sha,
         "--commit-message",
@@ -75,6 +83,8 @@ def cli_args():
         values.commit_author,
         "--trigger",
         values.trigger,
+        "--changes",
+        values.changes,
         "--commit-url",
         values.commit_url,
         "--run-url",
@@ -95,21 +105,114 @@ class NotifyFeishuTest(unittest.TestCase):
         self.assertEqual(card["header"]["template"], "purple")
         self.assertEqual(
             card["header"]["title"]["content"],
-            "🚀 robomimic 镜像发布成功",
+            "Docker 镜像发布成功",
         )
 
         markdown = card["elements"][0]["content"]
-        self.assertIn("`ghcr.io/qingtianrobot/robomimic:latest`", markdown)
-        self.assertIn("`ghcr.io/qingtianrobot/robomimic:sha-1234567`", markdown)
-        self.assertIn("`sha256:abc123`", markdown)
-        self.assertIn("[1234567]", markdown)
+        for heading in (
+            "**仓库**",
+            "**版本**",
+            "**提交**",
+            "**提交信息**",
+            "**作者**",
+            "**触发方式**",
+            "**流水线**",
+            "**镜像包**",
+            "**拉取命令**",
+            "**Digest 拉取**",
+            "**Digest（缩略）**",
+            "**本次改动**",
+            "**发布标签**",
+        ):
+            self.assertIn(heading, markdown)
+
+        self.assertIn("`QingTianRobot/robomimic`", markdown)
+        self.assertIn("`master` / `1234567890ab`", markdown)
+        self.assertIn(f"[1234567890ab]({metadata().commit_url})", markdown)
         self.assertIn("Fix \\*unsafe\\* \\[card\\] content", markdown)
         self.assertIn("Robot\\_Author", markdown)
         self.assertIn("`push`", markdown)
+        self.assertIn(f"[查看流水线]({metadata().run_url})", markdown)
+        self.assertIn(
+            f"[ghcr.io/qingtianrobot/robomimic]({metadata().package_url})",
+            markdown,
+        )
+        self.assertIn(
+            "```bash\n"
+            "docker pull ghcr.io/qingtianrobot/robomimic:latest\n"
+            "```",
+            markdown,
+        )
+        self.assertIn(
+            "```bash\n"
+            f"docker pull ghcr.io/qingtianrobot/robomimic@{FULL_DIGEST}\n"
+            "```",
+            markdown,
+        )
+        self.assertIn("`sha256:0123456789ab…`", markdown)
+        self.assertIn("- 1234567 Fix first change", markdown)
+        self.assertIn("- 89abcde Add second change", markdown)
+        self.assertIn(
+            "```text\n"
+            "ghcr.io/qingtianrobot/robomimic:latest\n"
+            "ghcr.io/qingtianrobot/robomimic:sha-1234567\n"
+            "```",
+            markdown,
+        )
+        self.assertIn("关键词：Docker image published", markdown)
 
         actions = card["elements"][1]["actions"]
         self.assertEqual(actions[0]["url"], metadata().run_url)
         self.assertEqual(actions[1]["url"], metadata().package_url)
+
+    def test_changes_are_limited_and_neutralize_card_injection(self):
+        changes = [
+            "1111111 Safe first change",
+            "2222222 <at id=all></at> mention",
+            "3333333 ```bash malicious fence ```",
+            "4444444 [link](https://malicious.example) *bold*",
+            "5555555 # heading > quote",
+            "6666666 " + "x" * 400,
+            "7777777 Seventh change",
+            "8888888 Eighth change",
+            "9999999 Must not appear",
+            "aaaaaaa Also must not appear",
+        ]
+
+        payload = notify.build_payload(metadata(changes="\n".join(changes)))
+        markdown = payload["card"]["elements"][0]["content"]
+        changes_section = markdown.split("**本次改动**\n", 1)[1].split(
+            "\n**发布标签**",
+            1,
+        )[0]
+        rendered_changes = [
+            line for line in changes_section.splitlines() if line.startswith("- ")
+        ]
+
+        self.assertEqual(len(rendered_changes), 8)
+        self.assertNotIn("9999999", changes_section)
+        self.assertNotIn("aaaaaaa", changes_section)
+        self.assertNotIn("<at", changes_section)
+        self.assertNotIn("```", changes_section)
+        self.assertNotIn("[link](", changes_section)
+        for line in rendered_changes:
+            self.assertRegex(line, r"^- [0-9a-f]{7} .+")
+        self.assertTrue(
+            all(len(line) <= notify.MAX_CHANGE_LENGTH + 2 for line in rendered_changes)
+        )
+
+    def test_cli_accepts_required_release_context(self):
+        arguments = cli_args()
+        change_index = arguments.index("--changes")
+        arguments[change_index : change_index + 2] = [
+            "--changes=-release $(not-executed) ;",
+        ]
+
+        args = notify.parse_args(arguments)
+
+        self.assertEqual(args.repository, "QingTianRobot/robomimic")
+        self.assertEqual(args.ref_name, "master")
+        self.assertEqual(args.changes, "-release $(not-executed) ;")
 
     def test_markdown_fields_are_compacted_and_length_limited(self):
         escaped = notify.escape_markdown("x" * 400 + "\nignored", limit=300)

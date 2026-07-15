@@ -16,6 +16,8 @@ from urllib import request as urllib_request
 REQUEST_TIMEOUT_SECONDS = 15
 MAX_RESPONSE_BYTES = 64 * 1024
 MAX_MARKDOWN_FIELD_LENGTH = 300
+MAX_CHANGE_LENGTH = 180
+MAX_CHANGE_COUNT = 8
 
 
 class NotificationError(RuntimeError):
@@ -27,10 +29,13 @@ class PublishMetadata:
     image: str
     sha_tag: str
     digest: str
+    repository: str
+    ref_name: str
     commit_sha: str
     commit_message: str
     commit_author: str
     trigger: str
+    changes: str
     commit_url: str
     run_url: str
     package_url: str
@@ -73,24 +78,66 @@ def make_signature(secret, timestamp):
     return base64.b64encode(digest).decode("utf-8")
 
 
+def _short_digest(digest):
+    algorithm, separator, value = digest.partition(":")
+    if separator and len(value) > 12:
+        return f"{algorithm}:{value[:12]}…"
+    if len(digest) > 19:
+        return f"{digest[:18]}…"
+    return digest
+
+
+def _format_changes(metadata):
+    changes = [line for line in metadata.changes.splitlines() if line.strip()]
+    if not changes:
+        changes = [f"{metadata.commit_sha[:7]} {metadata.commit_message}"]
+    return "\n".join(
+        f"- {escape_markdown(change, limit=MAX_CHANGE_LENGTH)}"
+        for change in changes[:MAX_CHANGE_COUNT]
+    )
+
+
 def build_payload(metadata, signing_secret="", timestamp=None):
-    short_sha = metadata.commit_sha[:7]
+    display_sha = metadata.commit_sha[:12]
+    latest_image = f"{metadata.image}:latest"
+    sha_image = f"{metadata.image}:{metadata.sha_tag}"
+    digest_image = f"{metadata.image}@{metadata.digest}"
     markdown = "\n".join(
         (
-            "**镜像地址**",
-            f"`{metadata.image}:latest`",
-            "**SHA 标签**",
-            f"`{metadata.image}:{metadata.sha_tag}`",
-            "**Digest**",
-            f"`{metadata.digest}`",
+            "**仓库**",
+            f"`{escape_markdown(metadata.repository)}`",
+            "**版本**",
+            f"`{escape_markdown(metadata.ref_name)}` / `{display_sha}`",
             "**提交**",
-            f"[{short_sha}]({metadata.commit_url})",
+            f"[{display_sha}]({metadata.commit_url})",
             "**提交信息**",
             escape_markdown(metadata.commit_message),
-            "**提交作者**",
+            "**作者**",
             escape_markdown(metadata.commit_author),
             "**触发方式**",
             f"`{escape_markdown(metadata.trigger)}`",
+            "**流水线**",
+            f"[查看流水线]({metadata.run_url})",
+            "**镜像包**",
+            f"[{metadata.image}]({metadata.package_url})",
+            "**拉取命令**",
+            "```bash",
+            f"docker pull {latest_image}",
+            "```",
+            "**Digest 拉取**",
+            "```bash",
+            f"docker pull {digest_image}",
+            "```",
+            "**Digest（缩略）**",
+            f"`{_short_digest(metadata.digest)}`",
+            "**本次改动**",
+            _format_changes(metadata),
+            "**发布标签**",
+            "```text",
+            latest_image,
+            sha_image,
+            "```",
+            "关键词：Docker image published",
         )
     )
     payload = {
@@ -101,7 +148,7 @@ def build_payload(metadata, signing_secret="", timestamp=None):
                 "template": "purple",
                 "title": {
                     "tag": "plain_text",
-                    "content": "🚀 robomimic 镜像发布成功",
+                    "content": "Docker 镜像发布成功",
                 },
             },
             "elements": [
@@ -235,10 +282,13 @@ def parse_args(argv=None):
     parser.add_argument("--image", required=True)
     parser.add_argument("--sha-tag", required=True)
     parser.add_argument("--digest", required=True)
+    parser.add_argument("--repository", required=True)
+    parser.add_argument("--ref-name", required=True)
     parser.add_argument("--commit-sha", required=True)
     parser.add_argument("--commit-message", required=True)
     parser.add_argument("--commit-author", required=True)
     parser.add_argument("--trigger", required=True)
+    parser.add_argument("--changes", required=True)
     parser.add_argument("--commit-url", required=True)
     parser.add_argument("--run-url", required=True)
     parser.add_argument("--package-url", required=True)
@@ -253,10 +303,13 @@ def main(argv=None):
         image=args.image,
         sha_tag=args.sha_tag,
         digest=args.digest,
+        repository=args.repository,
+        ref_name=args.ref_name,
         commit_sha=args.commit_sha,
         commit_message=args.commit_message,
         commit_author=args.commit_author,
         trigger=args.trigger,
+        changes=args.changes,
         commit_url=args.commit_url,
         run_url=args.run_url,
         package_url=args.package_url,
