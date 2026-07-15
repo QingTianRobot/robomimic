@@ -79,22 +79,22 @@ docker compose build
 
 ### Published image and Feishu notifications
 
-Pushes to `master` automatically publish a Linux AMD64 image to GitHub Container Registry. The workflow can also be started manually only from `master` with **Actions → Publish Docker image → Run workflow**.
+Pushes to `master` automatically publish a Linux AMD64 image to GitHub Container Registry. To run the workflow manually, open **Actions → Publish Docker image → Run workflow** and select `master`; the job guard skips runs for any other ref.
 
-After the first successful publication, open the GHCR Package Settings and change the package visibility to **Public**. Public images can then be pulled without authentication:
+After the first successful publication, a repository administrator must open the GHCR Package Settings and change the package visibility to **Public**. Public images can then be pulled without authentication:
 
 ```bash
 docker pull ghcr.io/qingtianrobot/robomimic:latest
 ```
 
-Each publication also creates an immutable traceable tag in the form `ghcr.io/qingtianrobot/robomimic:sha-<short-sha>` and records the image digest in the workflow output.
+Each publication also creates a traceable, commit-derived tag in the form `ghcr.io/qingtianrobot/robomimic:sha-<short-sha>`. The build step output provides the digest, which is the immutable image reference and is included in the Feishu card.
 
-To enable the success notification, configure repository secrets under **Settings → Secrets and variables → Actions**:
+Before triggering a publication push, a repository administrator must configure repository secrets under **Settings → Secrets and variables → Actions**:
 
 - `FEISHU_WEBHOOK_URL` — required custom-bot webhook URL
-- `FEISHU_WEBHOOK_SECRET` — optional signing secret when signature verification is enabled
+- `FEISHU_WEBHOOK_SECRET` — optional; configure it only when signature verification is enabled
 
-Only a successfully pushed image sends a purple Feishu card. The card includes the image references, digest, linked commit and author, and links to the workflow run and GHCR package. Build or push failures do not send a notification.
+Keep both values in Actions secrets; do not pass them on the command line or place them in repository files. The workflow sends a purple Feishu card only after a successful image push. The card includes the image references, digest, linked commit and author, and links to the workflow run and GHCR package. Build or push failures do not send a notification. If the required webhook URL is missing or the webhook request fails after the push, the image remains published but the workflow fails at the notification step; a notification failure does not roll back the image.
 
 The graphical Compose workflow requires:
 
