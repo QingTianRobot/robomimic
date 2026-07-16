@@ -69,13 +69,14 @@ RUN /opt/conda/bin/conda run -n robomimic_venv pip install -r requirements-docs.
 # Set the working directory
 WORKDIR /workspace
 
-# Install Zsh through a domestic Ubuntu mirror near the end to preserve existing build cache
+# Install Zsh and the GLVND EGL dispatcher through a domestic Ubuntu mirror
+# near the end to preserve the expensive CUDA / PyTorch build cache.
 ARG UBUNTU_APT_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/ubuntu
 RUN sed -i \
         -e "s|http://archive.ubuntu.com/ubuntu/|${UBUNTU_APT_MIRROR}/|g" \
         -e "s|http://security.ubuntu.com/ubuntu/|${UBUNTU_APT_MIRROR}/|g" \
         /etc/apt/sources.list && \
-    apt-get update && apt-get install -y --no-install-recommends zsh && \
+    apt-get update && apt-get install -y --no-install-recommends zsh libegl1 && \
     rm -rf /var/lib/apt/lists/*
 
 COPY docker/robomimic-entrypoint.sh /usr/local/bin/robomimic-entrypoint

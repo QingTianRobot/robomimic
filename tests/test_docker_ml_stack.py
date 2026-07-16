@@ -31,3 +31,9 @@ def test_pytorch_wheels_default_to_overridable_domestic_cu128_mirror():
     assert '--find-links "${PYTORCH_WHEEL_URL}"' in dockerfile
     assert "--extra-index-url" not in dockerfile
     assert f"PYTORCH_WHEEL_URL: ${{PYTORCH_WHEEL_URL:-{mirror}}}" in compose
+
+
+def test_dockerfile_installs_the_egl_dispatch_runtime():
+    dockerfile = DOCKERFILE.read_text(encoding="utf-8")
+
+    assert "libegl1" in dockerfile
