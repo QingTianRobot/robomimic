@@ -105,6 +105,18 @@ The graphical Compose workflow requires:
 
 These graphical variables are not required to build the image, but they must be present before starting a GUI application from the container.
 
+### Host shortcuts
+
+Load the host-only Docker and dataset commands from the repository:
+
+```zsh
+source ./functions.zsh
+rmhelp
+```
+
+The host commands use the `rm*` prefix. Commands shown by `rshelp` are available
+only after entering the container.
+
 Open the repository in an interactive Zsh shell with `robomimic_venv` activated:
 
 ```bash

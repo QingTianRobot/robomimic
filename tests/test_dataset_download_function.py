@@ -5,7 +5,51 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-FUNCTIONS = ROOT / "function.zsh"
+FUNCTIONS = ROOT / "functions.zsh"
+
+
+def test_host_shortcut_file_uses_plural_name():
+    assert FUNCTIONS.is_file()
+    assert not (ROOT / "function.zsh").exists()
+    text = FUNCTIONS.read_text(encoding="utf-8")
+    assert "source /path/to/robomimic/functions.zsh" in text
+    for relative_path in (
+        "docs/superpowers/specs/2026-07-16-dataset-host-download-design.md",
+        "docs/superpowers/plans/2026-07-16-host-dataset-download.md",
+    ):
+        documentation = (ROOT / relative_path).read_text(encoding="utf-8")
+        assert "function.zsh" not in documentation
+
+
+def test_rmrun_prepares_host_bind_directories(tmp_path):
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_docker = fake_bin / "docker"
+    fake_docker.write_text("#!/usr/bin/env zsh\nexit 0\n", encoding="utf-8")
+    fake_docker.chmod(0o755)
+
+    command = (
+        f"source {shlex.quote(str(FUNCTIONS))} >/dev/null; "
+        f"ROBOMIMIC_REPO_DIR={shlex.quote(str(tmp_path / 'repo'))}; "
+        'mkdir -p "$ROBOMIMIC_REPO_DIR"; rmrun'
+    )
+    environment = os.environ.copy()
+    environment["PATH"] = f"{fake_bin}:{environment['PATH']}"
+    result = subprocess.run(
+        ["/usr/bin/zsh", "-fc", command],
+        cwd=ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    for relative_path in (
+        "datasets",
+        "models/huggingface",
+        "outputs/training",
+        "outputs/videos",
+    ):
+        assert (tmp_path / "repo" / relative_path).is_dir()
 
 
 def _write_fake_repo(tmp_path, *, dry_run):

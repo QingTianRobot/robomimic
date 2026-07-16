@@ -2,7 +2,7 @@
 
 ## Goal
 
-Provide a `function.zsh` command that accepts the same dataset-selection
+Provide a `functions.zsh` command that accepts the same dataset-selection
 arguments as `robomimic/scripts/download_datasets.py`, downloads files through
 the host's working network and proxy configuration, stores them under the
 repository, and exposes the same files to every Compose container through an
@@ -64,7 +64,7 @@ files cannot be committed accidentally or copied into image build contexts.
 
 ## Command Interface
 
-After sourcing `function.zsh`, the default command downloads Lift PH low-dim:
+After sourcing `functions.zsh`, the default command downloads Lift PH low-dim:
 
 ```zsh
 rmdataset
@@ -140,7 +140,7 @@ Automated tests cover:
 - `--dry_run` producing no transfer;
 - Compose resolving the explicit dataset bind mount;
 - `/datasets/` being ignored by Git and Docker;
-- `function.zsh` exposing `rmdataset` and documenting it in `rmhelp`;
+- `functions.zsh` exposing `rmdataset` and documenting it in `rmhelp`;
 - curl retry, redirect, resume, temporary-file, and atomic-rename contracts.
 
 Final runtime verification downloads the approximately 20 MB Lift PH low-dim

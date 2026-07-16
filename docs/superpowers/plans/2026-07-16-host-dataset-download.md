@@ -14,7 +14,7 @@
 
 - Create `robomimic/scripts/resolve_dataset_downloads.py`: pure registry-to-manifest resolver and CLI.
 - Create `tests/test_resolve_dataset_downloads.py`: selector expansion, URL, path, and CLI tests.
-- Modify `function.zsh`: add `rmdataset` and help text.
+- Modify `functions.zsh`: add `rmdataset` and help text.
 - Create `tests/test_dataset_download_function.py`: execute the real Zsh function against fake resolver and curl programs.
 - Modify `compose.yaml`: add the explicit host dataset bind mount.
 - Modify `.gitignore`: exclude repository datasets.
@@ -340,7 +340,7 @@ git commit -m "feat: resolve dataset download manifests"
 ### Task 2: Host `rmdataset` Function
 
 **Files:**
-- Modify: `function.zsh`
+- Modify: `functions.zsh`
 - Create: `tests/test_dataset_download_function.py`
 
 - [ ] **Step 1: Write failing function behavior tests**
@@ -355,7 +355,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-FUNCTIONS = ROOT / "function.zsh"
+FUNCTIONS = ROOT / "functions.zsh"
 
 
 def _write_fake_repo(tmp_path, *, dry_run):
@@ -494,7 +494,7 @@ Expected: failures report `rmdataset: command not found` and missing help text.
 
 - [ ] **Step 3: Implement `rmdataset` and help text**
 
-Add this function before `rmhelp` in `function.zsh`:
+Add this function before `rmhelp` in `functions.zsh`:
 
 ```zsh
 rmdataset() {
@@ -594,7 +594,7 @@ Expected: all function tests pass.
 - [ ] **Step 5: Commit the function**
 
 ```bash
-git add function.zsh tests/test_dataset_download_function.py
+git add functions.zsh tests/test_dataset_download_function.py
 git commit -m "feat: add host dataset download shortcut"
 ```
 
@@ -764,7 +764,7 @@ Expected: all three commands exit zero and Docker reports no warnings.
 Run:
 
 ```bash
-/usr/bin/zsh -lc 'source ./function.zsh >/dev/null; rmdataset --tasks lift --dataset_types ph --hdf5_types low_dim --dry_run'
+/usr/bin/zsh -lc 'source ./functions.zsh >/dev/null; rmdataset --tasks lift --dataset_types ph --hdf5_types low_dim --dry_run'
 ```
 
 Expected: output includes the official Hugging Face URL, the host path ending in `datasets/lift/ph/low_dim_v15.hdf5`, and the matching container path; no `.part` or completed dataset is created by this command.
@@ -774,7 +774,7 @@ Expected: output includes the official Hugging Face URL, the host path ending in
 Run with the user's existing `proxyon` environment active:
 
 ```bash
-/usr/bin/zsh -lc 'source ./function.zsh >/dev/null; rmdataset --tasks lift --dataset_types ph --hdf5_types low_dim'
+/usr/bin/zsh -lc 'source ./functions.zsh >/dev/null; rmdataset --tasks lift --dataset_types ph --hdf5_types low_dim'
 ```
 
 Expected: curl follows the Hugging Face/Xet redirects, downloads approximately 20 MB, and atomically creates `datasets/lift/ph/low_dim_v15.hdf5` with no remaining `.part` file.
@@ -797,7 +797,7 @@ Expected: host and container SHA-256 values are identical.
 Run:
 
 ```bash
-/usr/bin/zsh -lc 'source ./function.zsh >/dev/null; rmdataset --tasks lift --dataset_types ph --hdf5_types low_dim'
+/usr/bin/zsh -lc 'source ./functions.zsh >/dev/null; rmdataset --tasks lift --dataset_types ph --hdf5_types low_dim'
 ```
 
 Expected: output contains `数据集已存在，跳过` and returns immediately.

@@ -1,8 +1,16 @@
 # robomimic Docker shortcuts for Zsh.
-# Load once in a host terminal with: source /path/to/robomimic/function.zsh
+# Load once in a host terminal with: source /path/to/robomimic/functions.zsh
 
 # Resolve the repository from this file instead of the caller's current directory.
 typeset -g ROBOMIMIC_REPO_DIR="${${(%):-%N}:A:h}"
+
+_robomimic_prepare_runtime_dirs() {
+  mkdir -p \
+    "$ROBOMIMIC_REPO_DIR/datasets" \
+    "$ROBOMIMIC_REPO_DIR/models/huggingface" \
+    "$ROBOMIMIC_REPO_DIR/outputs/training" \
+    "$ROBOMIMIC_REPO_DIR/outputs/videos"
+}
 
 _robomimic_container_id() {
   docker ps \
@@ -14,6 +22,7 @@ _robomimic_container_id() {
 rmrun() {
   (
     cd "$ROBOMIMIC_REPO_DIR" || return 1
+    _robomimic_prepare_runtime_dirs || return 1
     docker compose run --rm robomimic
   )
 }
@@ -29,6 +38,7 @@ rmcam() {
 
   (
     cd "$ROBOMIMIC_REPO_DIR" || return 1
+    _robomimic_prepare_runtime_dirs || return 1
     docker compose run --rm \
       --device "$camera_device:$camera_device" \
       robomimic
