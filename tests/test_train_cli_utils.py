@@ -1,6 +1,9 @@
 from types import SimpleNamespace
 
-from robomimic.utils.train_cli_utils import apply_train_cli_overrides
+from robomimic.utils.train_cli_utils import (
+    apply_train_cli_overrides,
+    run_training_with_status,
+)
 
 
 class FakeConfig(SimpleNamespace):
@@ -17,6 +20,7 @@ def _config():
         lock_keys_called=False,
         experiment=SimpleNamespace(
             name="template",
+            render_video=True,
             epoch_every_n_steps=100,
             validation_epoch_every_n_steps=10,
             rollout=SimpleNamespace(rate=50, n=50, horizon=400),
@@ -49,6 +53,7 @@ def test_debug_mode_is_short_and_persistent_output_wins():
     assert config.experiment.rollout.rate == 1
     assert config.experiment.rollout.n == 2
     assert config.experiment.rollout.horizon == 10
+    assert config.experiment.render_video is False
     assert config.experiment.save.every_n_epochs == 1
     assert config.train.output_dir == "/opt/robomimic/outputs/training"
     assert config.unlock_called and config.lock_keys_called
@@ -67,4 +72,41 @@ def test_full_training_preserves_template_defaults_without_overrides():
 
     assert config.train.num_epochs == 2000
     assert config.experiment.save.every_n_epochs == 50
+    assert config.experiment.render_video is True
     assert config.train.output_dir == "../bc_trained_models"
+
+
+def test_training_failures_return_a_nonzero_status_and_traceback():
+    def fail_train(config, device, resume):
+        raise RuntimeError("rollout failed")
+
+    status, message = run_training_with_status(
+        train_fn=fail_train,
+        config=object(),
+        device="cuda",
+        resume=False,
+    )
+
+    assert status == 1
+    assert "run failed with error" in message
+    assert "rollout failed" in message
+    assert "RuntimeError" in message
+
+
+def test_successful_training_returns_zero_status():
+    calls = []
+
+    def successful_train(config, device, resume):
+        calls.append((config, device, resume))
+
+    config = object()
+    status, message = run_training_with_status(
+        train_fn=successful_train,
+        config=config,
+        device="cuda",
+        resume=True,
+    )
+
+    assert status == 0
+    assert message == "finished run successfully!"
+    assert calls == [(config, "cuda", True)]

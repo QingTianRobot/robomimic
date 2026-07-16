@@ -26,7 +26,6 @@ import shutil
 import psutil
 import sys
 import socket
-import traceback
 
 from collections import OrderedDict
 
@@ -41,7 +40,10 @@ import robomimic.utils.env_utils as EnvUtils
 import robomimic.utils.file_utils as FileUtils
 from robomimic.config import config_factory
 from robomimic.algo import algo_factory, RolloutPolicy
-from robomimic.utils.train_cli_utils import apply_train_cli_overrides
+from robomimic.utils.train_cli_utils import (
+    apply_train_cli_overrides,
+    run_training_with_status,
+)
 from robomimic.utils.log_utils import PrintLogger, DataLogger, flush_warnings
 
 
@@ -485,13 +487,14 @@ def main(args):
     # lock config to prevent further modifications and ensure missing keys raise errors
     config.lock()
 
-    # catch error during training and print it
-    res_str = "finished run successfully!"
-    try:
-        train(config, device=device, resume=args.resume)
-    except Exception as e:
-        res_str = "run failed with error:\n{}\n\n{}".format(e, traceback.format_exc())
+    status, res_str = run_training_with_status(
+        train_fn=train,
+        config=config,
+        device=device,
+        resume=args.resume,
+    )
     print(res_str)
+    return status
 
 
 if __name__ == "__main__":
@@ -551,4 +554,4 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    main(args)
+    raise SystemExit(main(args))
