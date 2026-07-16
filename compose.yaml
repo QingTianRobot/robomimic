@@ -30,6 +30,11 @@ services:
         bind:
           create_host_path: true
       - type: bind
+        source: ./outputs
+        target: /opt/robomimic/outputs
+        bind:
+          create_host_path: true
+      - type: bind
         source: ./models/huggingface
         target: /opt/models/huggingface
         bind:

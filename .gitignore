@@ -12,6 +12,9 @@ tests/assets/test_v15.hdf5
 # local downloaded datasets
 /datasets/
 
+# local training, checkpoint, and rollout outputs
+/outputs/
+
 # pycharm configs
 .idea/
 

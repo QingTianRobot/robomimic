@@ -24,3 +24,6 @@ tests/assets
 
 # local downloaded datasets
 /datasets/
+
+# local training, checkpoint, and rollout outputs
+/outputs/
