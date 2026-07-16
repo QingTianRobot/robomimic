@@ -25,6 +25,10 @@ if [[ -r /opt/conda/etc/profile.d/conda.sh ]]; then
   conda activate robomimic_venv
 fi
 
+if [[ -r /usr/local/share/robomimic/robomimic-functions.zsh ]]; then
+  source /usr/local/share/robomimic/robomimic-functions.zsh
+fi
+
 robomimic_banner() {
   print -P '%F{yellow}%B╭─ ROBOMIMIC CONTAINER ─────────────────────╮%b%f'
   print -P '%F{yellow}%B│%b%f %F{magenta}env: robomimic_venv%f                       %F{yellow}%B│%b%f'
@@ -46,4 +50,5 @@ PROMPT+=$'\n''%(?:%F{green}➜:%F{red}➜)%f '
 
 if [[ -o interactive && -t 1 ]]; then
   robomimic_banner
+  rshelp
 fi
