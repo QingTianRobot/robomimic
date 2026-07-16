@@ -79,9 +79,11 @@ RUN sed -i \
     rm -rf /var/lib/apt/lists/*
 
 COPY docker/robomimic-entrypoint.sh /usr/local/bin/robomimic-entrypoint
+COPY docker/robomimic.zshenv /root/.zshenv
 COPY docker/robomimic.zshrc /root/.zshrc
 COPY docker/robomimic-functions.zsh /usr/local/share/robomimic/robomimic-functions.zsh
 RUN chmod 0755 /usr/local/bin/robomimic-entrypoint && \
+    chmod 0644 /root/.zshenv && \
     chmod 0644 /usr/local/share/robomimic/robomimic-functions.zsh && \
     mkdir -p /tmp/oh-my-zsh-cache
 

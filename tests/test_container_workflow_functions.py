@@ -165,6 +165,7 @@ def test_gui_commands_reject_the_empty_compose_xauthority_mount(tmp_path):
 
 def test_rshelp_and_install_hooks_are_present():
     functions = FUNCTIONS.read_text(encoding="utf-8")
+    zshenv_path = ROOT / "docker/robomimic.zshenv"
     zshrc = (ROOT / "docker/robomimic.zshrc").read_text(encoding="utf-8")
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     for name in (
@@ -179,8 +180,12 @@ def test_rshelp_and_install_hooks_are_present():
         "rshelp",
     ):
         assert f"{name}()" in functions
+    assert zshenv_path.is_file()
+    zshenv = zshenv_path.read_text(encoding="utf-8")
+    assert "source /usr/local/share/robomimic/robomimic-functions.zsh" in zshenv
     assert "robomimic-functions.zsh" in zshrc
     assert "COPY docker/robomimic-functions.zsh" in dockerfile
+    assert "COPY docker/robomimic.zshenv /root/.zshenv" in dockerfile
 
 
 def test_rshelp_shows_default_paths_and_a_copyable_safe_workflow(tmp_path):
