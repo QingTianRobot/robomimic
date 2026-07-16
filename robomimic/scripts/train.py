@@ -12,6 +12,8 @@ Args:
 
     dataset (str): if provided, override the dataset path defined in the config
 
+    output_dir (str): if provided, override the directory for training artifacts
+
     debug (bool): set this flag to run a quick training run for debugging purposes    
 """
 
@@ -39,6 +41,7 @@ import robomimic.utils.env_utils as EnvUtils
 import robomimic.utils.file_utils as FileUtils
 from robomimic.config import config_factory
 from robomimic.algo import algo_factory, RolloutPolicy
+from robomimic.utils.train_cli_utils import apply_train_cli_overrides
 from robomimic.utils.log_utils import PrintLogger, DataLogger, flush_warnings
 
 
@@ -474,33 +477,10 @@ def main(args):
     else:
         config = config_factory(args.algo)
 
-    if args.dataset is not None:
-        config.train.data = [{"path": args.dataset}]
-
-    if args.name is not None:
-        config.experiment.name = args.name
+    apply_train_cli_overrides(config, args)
 
     # get torch device
     device = TorchUtils.get_torch_device(try_to_use_cuda=config.train.cuda)
-
-    # maybe modify config for debugging purposes
-    if args.debug:
-        # shrink length of training to test whether this run is likely to crash
-        config.unlock()
-        config.lock_keys()
-
-        # train and validate (if enabled) for 3 gradient steps, for 2 epochs
-        config.experiment.epoch_every_n_steps = 3
-        config.experiment.validation_epoch_every_n_steps = 3
-        config.train.num_epochs = 2
-
-        # if rollouts are enabled, try 2 rollouts at end of each epoch, with 10 environment steps
-        config.experiment.rollout.rate = 1
-        config.experiment.rollout.n = 2
-        config.experiment.rollout.horizon = 10
-
-        # send output to a temporary directory
-        config.train.output_dir = "/tmp/tmp_trained_models"
 
     # lock config to prevent further modifications and ensure missing keys raise errors
     config.lock()
@@ -547,6 +527,13 @@ if __name__ == "__main__":
         type=str,
         default=None,
         help="(optional) if provided, override the dataset path defined in the config",
+    )
+
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default=None,
+        help="(optional) override the directory used for logs, checkpoints, and videos",
     )
 
     # debug mode
