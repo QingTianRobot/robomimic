@@ -39,13 +39,19 @@ RUN /opt/conda/bin/conda config --system --remove-key default_channels || true &
 # Create and activate robomimic conda environment with Python 3.9
 RUN /opt/conda/bin/conda create -n robomimic_venv python=3.9 -y
 
-# Install PyTorch and torchvision with CPU fallback
-RUN /opt/conda/bin/conda run -n robomimic_venv conda install -y pytorch==2.0.0 torchvision==0.15.0 cpuonly -c pytorch || \
-    /opt/conda/bin/conda run -n robomimic_venv pip install torch==2.0.0+cpu torchvision==0.15.0+cpu
-
-# Use a domestic PyPI mirror for Python dependencies
+# Use domestic Python package mirrors by default
 ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
-ENV PIP_INDEX_URL=${PIP_INDEX_URL}
+ARG PYTORCH_WHEEL_URL=https://mirrors.aliyun.com/pytorch-wheels/cu118
+ENV PIP_INDEX_URL=${PIP_INDEX_URL} \
+    PYTORCH_WHEEL_URL=${PYTORCH_WHEEL_URL}
+
+# PyTorch 2.4.1 is built with NumPy 2 support; keep the CUDA and torchvision
+# versions aligned and do not silently fall back to a CPU-only wheel.
+RUN /opt/conda/bin/conda run -n robomimic_venv python -m pip install --no-cache-dir \
+    --find-links "${PYTORCH_WHEEL_URL}" \
+    numpy==2.0.1 \
+    torch==2.4.1+cu118 \
+    torchvision==0.19.1+cu118
 
 # Install the current robomimic source tree
 WORKDIR /opt/robomimic
