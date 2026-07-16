@@ -112,6 +112,7 @@ Load the host-only Docker and dataset commands from the repository:
 ```zsh
 source ./functions.zsh
 rmhelp
+rmrun
 ```
 
 The host commands use the `rm*` prefix. Commands shown by `rshelp` are available
@@ -135,6 +136,24 @@ A successful interactive startup displays a container-specific banner and prompt
 ```
 
 Seeing `[ROBOMIMIC CONTAINER]` means the shell is already inside the container; type commands directly, and use `exit` or `Ctrl+D` to return to the host.
+
+### Simulation, training, and policy rollout inside the container
+
+The image uses PyTorch 2.7.1 with CUDA 12.8 for RTX 50-series GPU support.
+After entering with `rmrun`, the container prints `rshelp` automatically.
+
+```zsh
+rsstatus
+rsplay
+rstrain
+rslatest
+rseval
+```
+
+Use `rstrain-full` only when you intend to start the complete BC schedule. Use
+`rsplay-gui` and `rseval-gui` for X11 windows. Training artifacts are persisted
+under `outputs/training`; playback and evaluation videos are stored under
+`outputs/videos` on both the host and container bind mount.
 
 The repository is bind-mounted at `/opt/robomimic`, so local source edits are immediately visible to the editable installation. The host Oh My Zsh directory is mounted read-only; the container uses the same `robbyrussell` theme and plugin selection without sourcing host-only Conda, ROS, Julia, or local-tool paths.
 
