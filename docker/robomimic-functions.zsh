@@ -135,12 +135,13 @@ rstrain() {
   _rs_require_file "$RS_DEFAULT_CONFIG" || return 1
   _rs_require_file "$RS_DEFAULT_DATASET" || return 1
   _rs_prepare_outputs || return 1
+  local run_name="lift-bc-smoke-$(date +%Y%m%d-%H%M%S-%N)"
   (
     umask 0000
     MUJOCO_GL=egl python "$RS_ROOT/robomimic/scripts/train.py" \
       --config "$RS_DEFAULT_CONFIG" \
       --dataset "$RS_DEFAULT_DATASET" \
-      --name lift-bc-smoke \
+      --name "$run_name" \
       --output_dir "$RS_TRAINING_ROOT" \
       --debug \
       "$@"

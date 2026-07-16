@@ -96,6 +96,21 @@ def test_output_preparation_preserves_the_interactive_shell_umask(tmp_path):
     assert lines == ["before=022", "after=022"]
 
 
+def test_repeated_smoke_training_uses_unique_default_run_names(tmp_path):
+    result, _, log = _run(tmp_path, "rstrain; rstrain")
+    assert result.returncode == 0, result.stderr
+    lines = log.read_text(encoding="utf-8").splitlines()
+    names = []
+    for line in lines:
+        marker = "--name "
+        name = line.split(marker, 1)[1].split(" ", 1)[0]
+        names.append(name)
+
+    assert len(names) == 2
+    assert all(name.startswith("lift-bc-smoke-") for name in names)
+    assert names[0] != names[1]
+
+
 def test_rslatest_and_rseval_use_newest_checkpoint(tmp_path):
     result, rs_root, log = _run(tmp_path, "true")
     assert result.returncode == 0
