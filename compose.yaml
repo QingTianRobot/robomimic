@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
       args:
         PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
-        PYTORCH_WHEEL_URL: ${PYTORCH_WHEEL_URL:-https://mirrors.aliyun.com/pytorch-wheels/cu118}
+        PYTORCH_WHEEL_URL: ${PYTORCH_WHEEL_URL:-https://mirrors.aliyun.com/pytorch-wheels/cu128}
         UBUNTU_APT_MIRROR: ${UBUNTU_APT_MIRROR:-https://mirrors.tuna.tsinghua.edu.cn/ubuntu}
     image: robomimic:latest
     gpus: all

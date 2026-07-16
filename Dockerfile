@@ -1,5 +1,5 @@
 # Base image with Python 3.9 and Linux
-FROM nvidia/cuda:11.8.0-base-ubuntu20.04
+FROM nvidia/cuda:12.8.1-base-ubuntu22.04
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -41,17 +41,17 @@ RUN /opt/conda/bin/conda create -n robomimic_venv python=3.9 -y
 
 # Use domestic Python package mirrors by default
 ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
-ARG PYTORCH_WHEEL_URL=https://mirrors.aliyun.com/pytorch-wheels/cu118
+ARG PYTORCH_WHEEL_URL=https://mirrors.aliyun.com/pytorch-wheels/cu128
 ENV PIP_INDEX_URL=${PIP_INDEX_URL} \
     PYTORCH_WHEEL_URL=${PYTORCH_WHEEL_URL}
 
-# PyTorch 2.4.1 is built with NumPy 2 support; keep the CUDA and torchvision
+# PyTorch 2.7.1 is built with NumPy 2 support; keep the CUDA and torchvision
 # versions aligned and do not silently fall back to a CPU-only wheel.
 RUN /opt/conda/bin/conda run -n robomimic_venv python -m pip install --no-cache-dir \
     --find-links "${PYTORCH_WHEEL_URL}" \
     numpy==2.0.1 \
-    torch==2.4.1+cu118 \
-    torchvision==0.19.1+cu118
+    torch==2.7.1+cu128 \
+    torchvision==0.22.1+cu128
 
 # Install the current robomimic source tree
 WORKDIR /opt/robomimic
