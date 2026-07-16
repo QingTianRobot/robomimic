@@ -25,6 +25,11 @@ services:
         source: .
         target: /opt/robomimic
       - type: bind
+        source: ./datasets
+        target: /opt/robomimic/datasets
+        bind:
+          create_host_path: true
+      - type: bind
         source: ./models/huggingface
         target: /opt/models/huggingface
         bind:

@@ -9,6 +9,9 @@ tests/assets/test_v15.hdf5
 # local model cache
 /models/
 
+# local downloaded datasets
+/datasets/
+
 # pycharm configs
 .idea/
 

@@ -21,3 +21,6 @@ tests/assets
 
 # local model cache
 /models/
+
+# local downloaded datasets
+/datasets/
